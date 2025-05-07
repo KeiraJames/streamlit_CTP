@@ -1,4 +1,5 @@
 import streamlit as st
+st.set_page_config(page_title="Plant Buddy", page_icon="🌿", layout="wide")
 from PIL import Image
 import os
 import json
@@ -757,7 +758,7 @@ def display_chat_interface(current_plant_care_info=None, plant_id_result=None): 
 
 # --- Main App Logic ---
 def main():
-    st.set_page_config(page_title="Plant Buddy", page_icon="🌿", layout="wide")
+    
 
     # --- Sidebar Navigation and Saved Plants ---
     st.sidebar.title("📚 Plant Buddy")
