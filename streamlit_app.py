@@ -52,7 +52,7 @@ def get_latest_stats():
     client = get_mongodb_client()
     if not client:
         return None
-    
+
     try:
         db = client['temp_moisture']
         collection = db['c1']
@@ -63,6 +63,7 @@ def get_latest_stats():
         return None
     finally:
         # No need to close connection as it's managed by cache_resource
+        pass
 
 # Load plant care data from JSON file
 try:
