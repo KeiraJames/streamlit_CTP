@@ -1148,7 +1148,7 @@ def main():
 
                         # --- Case 2: Care Info NOT Found ---
                         else:
-                            st.warning("Could not find specific care instructions or personality profile 
+                            st.warning("Could not find specific care instructions or personality profile")
                             st.warning("Could not find specific care instructions or personality profile for this exact plant in our database.")
 
                             if st.session_state.suggestions is None:
