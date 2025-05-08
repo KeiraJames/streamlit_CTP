@@ -156,7 +156,7 @@ def display_image_with_max_height(image_source, caption="", max_height_px=300, m
         img_style_str = "; ".join(img_styles) # Join styles with semicolons
 
         # Use a div with flexbox to ensure centering, especially if captions are long
-        '''
+    
         html_string = f"""
         <div style="display: flex; justify-content: center; flex-direction: column; align-items: center; margin-bottom: 10px;">
             <img src="{img_data_url}"
@@ -164,7 +164,7 @@ def display_image_with_max_height(image_source, caption="", max_height_px=300, m
                  alt="{caption or 'Uploaded image'}">
             {f'<p style="text-align: center; font-size: 0.9em; color: grey; margin-top: 5px;">{caption}</p>' if caption else ""}
         </div>
-        '''
+        
         st.markdown(html_string, unsafe_allow_html=True)
 # =======================================================
 
