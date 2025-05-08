@@ -58,59 +58,8 @@ def get_latest_stats():
         # No need to close connection as it's managed by cache_resource
 
 # Sample plant care data - In a real app, this would be loaded from a file
-SAMPLE_PLANT_CARE_DATA = [
-    {
-        "Plant Name": "Monstera Deliciosa",
-        "Scientific Name": "Monstera deliciosa",
-        "Common Names": ["Swiss Cheese Plant", "Split-leaf Philodendron"],
-        "Light Requirements": "Bright indirect light, can tolerate some shade",
-        "Watering": "Allow top inch of soil to dry out between waterings",
-        "Humidity Preferences": "Prefers high humidity, 60-80%",
-        "Temperature Range": "65-85°F (18-29°C)",
-        "Feeding Schedule": "Monthly during growing season with balanced fertilizer",
-        "Toxicity": "Toxic to pets if ingested",
-        "Additional Care": "Wipe leaves occasionally to remove dust. Support with moss pole for climbing.",
-        "Personality": {
-            "Title": "The Tropical Explorer",
-            "Traits": ["adventurous", "dramatic", "tropical"],
-            "Prompt": "Respond as a dramatic tropical plant that loves to show off its leaves."
-        }
-    },
-    {
-        "Plant Name": "Snake Plant",
-        "Scientific Name": "Dracaena trifasciata",
-        "Common Names": ["Mother-in-law's Tongue", "Viper's Bowstring Hemp"],
-        "Light Requirements": "Adaptable to various light conditions, from low to bright indirect",
-        "Watering": "Allow to dry completely between waterings, water sparingly in winter",
-        "Humidity Preferences": "Tolerates dry air, no special humidity requirements",
-        "Temperature Range": "60-85°F (15-29°C)",
-        "Feeding Schedule": "Fertilize lightly 2-3 times per year",
-        "Toxicity": "Mildly toxic to pets if ingested",
-        "Additional Care": "Perfect for beginners. Very forgiving and air-purifying.",
-        "Personality": {
-            "Title": "The Stoic Survivor",
-            "Traits": ["resilient", "independent", "straightforward"],
-            "Prompt": "Respond as a no-nonsense, tough plant that can survive almost anything."
-        }
-    },
-    {
-        "Plant Name": "Peace Lily",
-        "Scientific Name": "Spathiphyllum wallisii",
-        "Common Names": ["White Sail Plant", "Spathe Flower"],
-        "Light Requirements": "Low to medium indirect light",
-        "Watering": "Keep soil consistently moist but not soggy, droops when thirsty",
-        "Humidity Preferences": "Prefers high humidity, 50-70%",
-        "Temperature Range": "65-80°F (18-27°C)",
-        "Feeding Schedule": "Fertilize every 6-8 weeks during growing season",
-        "Toxicity": "Toxic to pets and humans if ingested",
-        "Additional Care": "Excellent air purifier. Wipe leaves occasionally to remove dust.",
-        "Personality": {
-            "Title": "The Elegant Communicator",
-            "Traits": ["expressive", "dramatic", "sensitive"],
-            "Prompt": "Respond as a dramatic plant that clearly shows when it needs water by drooping."
-        }
-    }
-]
+with open("plants_with_personality3_copy.json", "r", encoding="utf-8") as f:
+    SAMPLE_PLANT_CARE_DATA = json.load(f)
 
 # =======================================================
 # ===== IMAGE DISPLAY HELPER FUNCTION =====
