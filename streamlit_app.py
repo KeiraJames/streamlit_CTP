@@ -24,8 +24,8 @@ from fuzzywuzzy import process
 
 # API Keys - Replace with your actual API keys
 # In a production app, use st.secrets or environment variables
-PLANTNET_API_KEY = st.secrets.get("PLANTNET_API_KEY", "AIzaSyCd-6N83gfhMx_-D4WCAc-8iOFSb6hDJ_Q")
-GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "2b10X3YLMd8PNAuKOCVPt7MeUe")
+PLANTNET_API_KEY = st.secrets.get("PLANTNET_API_KEY", "your_plantnet_api_key_here")
+GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "your_gemini_api_key_here")
 
 # MongoDB Connection
 MONGO_URI = st.secrets.get("MONGO_URI", "mongodb+srv://recent:recent@cluster0.i7fqn.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
@@ -64,31 +64,60 @@ def get_latest_stats():
     finally:
         # No need to close connection as it's managed by cache_resource
 
-# Load plant care data from JSON file
-try:
-    with open("plants_with_personality3_copy.json", "r", encoding="utf-8") as f:
-        SAMPLE_PLANT_CARE_DATA = json.load(f)
-    print(f"Loaded {len(SAMPLE_PLANT_CARE_DATA)} plants from JSON file")
-except Exception as e:
-    print(f"Error loading plant data from JSON: {e}")
-    # Fallback to a minimal dataset if file loading fails
-    SAMPLE_PLANT_CARE_DATA = [
-        {
-            "Plant Name": "Demo Plant",
-            "Scientific Name": "Plantus demonstratus",
-            "Light Requirements": "Medium light",
-            "Watering": "Keep soil moist",
-            "Humidity Preferences": "Average humidity",
-            "Temperature Range": "65-80°F",
-            "Feeding Schedule": "Monthly during growing season",
-            "Toxicity": "Non-toxic",
-            "Personality": {
-                "Title": "The Demo Plant",
-                "Traits": ["helpful", "informative"],
-                "Prompt": "Respond as a friendly demo plant."
-            }
+# Sample plant care data - In a real app, this would be loaded from a file
+SAMPLE_PLANT_CARE_DATA = [
+    {
+        "Plant Name": "Monstera Deliciosa",
+        "Scientific Name": "Monstera deliciosa",
+        "Common Names": ["Swiss Cheese Plant", "Split-leaf Philodendron"],
+        "Light Requirements": "Bright indirect light, can tolerate some shade",
+        "Watering": "Allow top inch of soil to dry out between waterings",
+        "Humidity Preferences": "Prefers high humidity, 60-80%",
+        "Temperature Range": "65-85°F (18-29°C)",
+        "Feeding Schedule": "Monthly during growing season with balanced fertilizer",
+        "Toxicity": "Toxic to pets if ingested",
+        "Additional Care": "Wipe leaves occasionally to remove dust. Support with moss pole for climbing.",
+        "Personality": {
+            "Title": "The Tropical Explorer",
+            "Traits": ["adventurous", "dramatic", "tropical"],
+            "Prompt": "Respond as a dramatic tropical plant that loves to show off its leaves."
         }
-    ]
+    },
+    {
+        "Plant Name": "Snake Plant",
+        "Scientific Name": "Dracaena trifasciata",
+        "Common Names": ["Mother-in-law's Tongue", "Viper's Bowstring Hemp"],
+        "Light Requirements": "Adaptable to various light conditions, from low to bright indirect",
+        "Watering": "Allow to dry completely between waterings, water sparingly in winter",
+        "Humidity Preferences": "Tolerates dry air, no special humidity requirements",
+        "Temperature Range": "60-85°F (15-29°C)",
+        "Feeding Schedule": "Fertilize lightly 2-3 times per year",
+        "Toxicity": "Mildly toxic to pets if ingested",
+        "Additional Care": "Perfect for beginners. Very forgiving and air-purifying.",
+        "Personality": {
+            "Title": "The Stoic Survivor",
+            "Traits": ["resilient", "independent", "straightforward"],
+            "Prompt": "Respond as a no-nonsense, tough plant that can survive almost anything."
+        }
+    },
+    {
+        "Plant Name": "Peace Lily",
+        "Scientific Name": "Spathiphyllum wallisii",
+        "Common Names": ["White Sail Plant", "Spathe Flower"],
+        "Light Requirements": "Low to medium indirect light",
+        "Watering": "Keep soil consistently moist but not soggy, droops when thirsty",
+        "Humidity Preferences": "Prefers high humidity, 50-70%",
+        "Temperature Range": "65-80°F (18-27°C)",
+        "Feeding Schedule": "Fertilize every 6-8 weeks during growing season",
+        "Toxicity": "Toxic to pets and humans if ingested",
+        "Additional Care": "Excellent air purifier. Wipe leaves occasionally to remove dust.",
+        "Personality": {
+            "Title": "The Elegant Communicator",
+            "Traits": ["expressive", "dramatic", "sensitive"],
+            "Prompt": "Respond as a dramatic plant that clearly shows when it needs water by drooping."
+        }
+    }
+]
 
 # =======================================================
 # ===== IMAGE DISPLAY HELPER FUNCTION =====
@@ -400,10 +429,7 @@ def chat_with_plant(care_info, conversation_history, id_result=None): # Add id_r
 
 @st.cache_data(show_spinner=False)
 def load_plant_care_data():
-    """Load plant care data"""
-    if not SAMPLE_PLANT_CARE_DATA:
-        st.error("Failed to load plant care data.")
-        return []
+    """Load sample plant care data"""
     return SAMPLE_PLANT_CARE_DATA
 
 
@@ -1122,6 +1148,7 @@ def main():
 
                         # --- Case 2: Care Info NOT Found ---
                         else:
+                            st.warning("Could not find specific care instructions or personality profile 
                             st.warning("Could not find specific care instructions or personality profile for this exact plant in our database.")
 
                             if st.session_state.suggestions is None:
