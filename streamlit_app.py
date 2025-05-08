@@ -24,8 +24,8 @@ from fuzzywuzzy import process
 
 # API Keys - Replace with your actual API keys
 # In a production app, use st.secrets or environment variables
-PLANTNET_API_KEY = st.secrets.get("PLANTNET_API_KEY", "2b10X3YLMd8PNAuKOCVPt7MeUe")
-GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "AIzaSyCd-6N83gfhMx_-D4WCAc-8iOFSb6hDJ_Q")
+PLANTNET_API_KEY = st.secrets.get("PLANTNET_API_KEY", "AIzaSyCd-6N83gfhMx_-D4WCAc-8iOFSb6hDJ_Q")
+GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "2b10X3YLMd8PNAuKOCVPt7MeUe")
 
 # MongoDB Connection
 MONGO_URI = st.secrets.get("MONGO_URI", "mongodb+srv://recent:recent@cluster0.i7fqn.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
@@ -52,7 +52,7 @@ def get_latest_stats():
     client = get_mongodb_client()
     if not client:
         return None
-
+    
     try:
         db = client['temp_moisture']
         collection = db['c1']
@@ -63,7 +63,6 @@ def get_latest_stats():
         return None
     finally:
         # No need to close connection as it's managed by cache_resource
-        pass
 
 # Load plant care data from JSON file
 try:
