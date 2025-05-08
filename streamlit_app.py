@@ -34,7 +34,7 @@ EASTERN_TZ = pytz.timezone('US/Eastern')
 with open("plants_with_personality3_copy.json", "r", encoding="utf-8") as f:
     SAMPLE_PLANT_CARE_DATA = json.load(f)
 
-SAMPLE_PLANT_CARE_DATA = 
+
 
 # =======================================================
 # ===== IMAGE DISPLAY HELPER FUNCTION =====
