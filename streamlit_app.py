@@ -7,38 +7,82 @@ import requests
 import base64
 import tempfile
 from io import BytesIO
-from fuzzywuzzy import process
 import pytz
 from datetime import datetime
-# Use api_config for keys
-from api_config import PLANTNET_API_KEY, GEMINI_API_KEY
-import streamlit.components.v1 as components
+import random
 
-# ===== Animation HTML =====
-# IMPORTANT: Replace the placeholder in the img src attribute!
-loading_animation_html = """
-<!DOCTYPE html>
-<html>
-<head>
-<title>Loading Animation</title>
-<style> /* Keep CSS as is */ </style>
-</head>
-<body>
-    <div class="halftone-container" id="halftoneContainer"></div>
-    <img id="sourceImage" src="<<<--- PASTE YOUR COMPLETE BASE64 DATA URL FROM THE **THREE-LEAF** TRANSPARENT PNG HERE --->>>" style="display: none;">
-    <canvas id="samplingCanvas" style="display: none;"></canvas>
-<script> /* Keep FULL JS as is */ </script>
-</body>
-</html>
-""" # Remember to paste your Base64 image data URL here
+# Install required packages if not already installed
+# Uncomment these lines if you need to install dependencies
+# import subprocess
+# subprocess.call(['pip', 'install', 'fuzzywuzzy'])
+# subprocess.call(['pip', 'install', 'python-Levenshtein'])
 
-# --- Constants and Global Init ---
-# PLANTNET_API_KEY and GEMINI_API_KEY are imported from api_config.py
+from fuzzywuzzy import process
+
+# API Keys - Replace with your actual API keys
+# In a production app, use st.secrets or environment variables
+PLANTNET_API_KEY = st.secrets.get("PLANTNET_API_KEY", "your_plantnet_api_key_here")
+GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "your_gemini_api_key_here")
+
+# Constants
 PLANTNET_URL = "https://my-api.plantnet.org/v2/identify/all"
-# Use the imported GEMINI_API_KEY
 GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
 EASTERN_TZ = pytz.timezone('US/Eastern')
-PLANT_CARE_FILE = "plants_with_personality3_copy.json" # Use the original filename
+
+# Sample plant care data - In a real app, this would be loaded from a file
+SAMPLE_PLANT_CARE_DATA = [
+    {
+        "Plant Name": "Monstera Deliciosa",
+        "Scientific Name": "Monstera deliciosa",
+        "Common Names": ["Swiss Cheese Plant", "Split-leaf Philodendron"],
+        "Light Requirements": "Bright indirect light, can tolerate some shade",
+        "Watering": "Allow top inch of soil to dry out between waterings",
+        "Humidity Preferences": "Prefers high humidity, 60-80%",
+        "Temperature Range": "65-85°F (18-29°C)",
+        "Feeding Schedule": "Monthly during growing season with balanced fertilizer",
+        "Toxicity": "Toxic to pets if ingested",
+        "Additional Care": "Wipe leaves occasionally to remove dust. Support with moss pole for climbing.",
+        "Personality": {
+            "Title": "The Tropical Explorer",
+            "Traits": ["adventurous", "dramatic", "tropical"],
+            "Prompt": "Respond as a dramatic tropical plant that loves to show off its leaves."
+        }
+    },
+    {
+        "Plant Name": "Snake Plant",
+        "Scientific Name": "Dracaena trifasciata",
+        "Common Names": ["Mother-in-law's Tongue", "Viper's Bowstring Hemp"],
+        "Light Requirements": "Adaptable to various light conditions, from low to bright indirect",
+        "Watering": "Allow to dry completely between waterings, water sparingly in winter",
+        "Humidity Preferences": "Tolerates dry air, no special humidity requirements",
+        "Temperature Range": "60-85°F (15-29°C)",
+        "Feeding Schedule": "Fertilize lightly 2-3 times per year",
+        "Toxicity": "Mildly toxic to pets if ingested",
+        "Additional Care": "Perfect for beginners. Very forgiving and air-purifying.",
+        "Personality": {
+            "Title": "The Stoic Survivor",
+            "Traits": ["resilient", "independent", "straightforward"],
+            "Prompt": "Respond as a no-nonsense, tough plant that can survive almost anything."
+        }
+    },
+    {
+        "Plant Name": "Peace Lily",
+        "Scientific Name": "Spathiphyllum wallisii",
+        "Common Names": ["White Sail Plant", "Spathe Flower"],
+        "Light Requirements": "Low to medium indirect light",
+        "Watering": "Keep soil consistently moist but not soggy, droops when thirsty",
+        "Humidity Preferences": "Prefers high humidity, 50-70%",
+        "Temperature Range": "65-80°F (18-27°C)",
+        "Feeding Schedule": "Fertilize every 6-8 weeks during growing season",
+        "Toxicity": "Toxic to pets and humans if ingested",
+        "Additional Care": "Excellent air purifier. Wipe leaves occasionally to remove dust.",
+        "Personality": {
+            "Title": "The Elegant Communicator",
+            "Traits": ["expressive", "dramatic", "sensitive"],
+            "Prompt": "Respond as a dramatic plant that clearly shows when it needs water by drooping."
+        }
+    }
+]
 
 # =======================================================
 # ===== IMAGE DISPLAY HELPER FUNCTION =====
@@ -108,12 +152,11 @@ def display_image_with_max_height(image_source, caption="", max_height_px=300, m
         # Add min-height style only if it's a positive value
         if min_height_px and min_height_px > 0:
             img_styles.append(f"min-height: {min_height_px}px")
-            # Optional: you might want object-fit if min/max height forces weird aspect ratios
-            # img_styles.append("object-fit: contain;") # Example: scales down to fit, preserving aspect ratio
 
         img_style_str = "; ".join(img_styles) # Join styles with semicolons
 
         # Use a div with flexbox to ensure centering, especially if captions are long
+        '''
         html_string = f"""
         <div style="display: flex; justify-content: center; flex-direction: column; align-items: center; margin-bottom: 10px;">
             <img src="{img_data_url}"
@@ -121,7 +164,7 @@ def display_image_with_max_height(image_source, caption="", max_height_px=300, m
                  alt="{caption or 'Uploaded image'}">
             {f'<p style="text-align: center; font-size: 0.9em; color: grey; margin-top: 5px;">{caption}</p>' if caption else ""}
         </div>
-        """
+        '''
         st.markdown(html_string, unsafe_allow_html=True)
 # =======================================================
 
@@ -130,8 +173,7 @@ def display_image_with_max_height(image_source, caption="", max_height_px=300, m
 
 def identify_plant(image_bytes):
     """Identifies plant using PlantNet API with refined error logging."""
-    # PLANTNET_API_KEY is imported from api_config
-    if not PLANTNET_API_KEY:
+    if not PLANTNET_API_KEY or PLANTNET_API_KEY == "your_plantnet_api_key_here":
         return {'error': "PlantNet API Key is not configured."}
     files = {'images': ('image.jpg', image_bytes)}
     params = {'api-key': PLANTNET_API_KEY, 'include-related-images': 'false'}
@@ -153,7 +195,7 @@ def identify_plant(image_bytes):
          return {'error': "API request timed out"}
     except requests.exceptions.RequestException as e:
         err_msg = f"Network/API error connecting to PlantNet: {e}"
-        resp_text = f" | Response: {e.response.text}" if e.response else " | Response: None"
+        resp_text = f" | Response: {e.response.text}" if hasattr(e, 'response') and e.response else " | Response: None"
         st.error(err_msg)
         print(f"ERROR: {err_msg}{resp_text}") # Log details
         return {'error': err_msg}
@@ -200,8 +242,7 @@ def create_personality_profile(care_info):
 
 def send_message(messages):
     """Sends messages to the Gemini API with refined error logging."""
-    # GEMINI_API_KEY is imported from api_config
-    if not GEMINI_API_KEY:
+    if not GEMINI_API_KEY or GEMINI_API_KEY == "your_gemini_api_key_here":
         return "Gemini API Key is not configured. Cannot send message."
     payload = {"contents": messages}
     headers = {"Content-Type": "application/json"}
@@ -231,7 +272,7 @@ def send_message(messages):
         err_msg = f"Error calling Gemini API: {e}"
         resp_text = ""
         # Try to get more detail from the response if available
-        if e.response is not None:
+        if hasattr(e, 'response') and e.response is not None:
             try:
                 resp_json = e.response.json()
                 error_detail = resp_json.get('error', {}).get('message', e.response.text)
@@ -256,8 +297,7 @@ def send_message(messages):
 def chat_with_plant(care_info, conversation_history, id_result=None): # Add id_result parameter
     """Constructs the prompt and calls the Gemini API. Handles missing care_info for generic chat."""
 
-    # GEMINI_API_KEY is imported from api_config
-    if not GEMINI_API_KEY:
+    if not GEMINI_API_KEY or GEMINI_API_KEY == "your_gemini_api_key_here":
         return "Chat feature disabled: Gemini API Key not set."
 
     plant_name = "this plant" # Default
@@ -354,25 +394,9 @@ def chat_with_plant(care_info, conversation_history, id_result=None): # Add id_r
 # --- Helper Functions ---
 
 @st.cache_data(show_spinner=False)
-def load_plant_care_data(filepath=PLANT_CARE_FILE):
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            # Basic validation: Check if it's a list
-            if isinstance(data, list):
-                return data
-            else:
-                st.error(f"Error in {filepath}: Expected a JSON list, but got {type(data).__name__}.")
-                return []
-    except FileNotFoundError:
-        st.error(f"Plant care file not found at {filepath}. Please ensure it exists.")
-        return []
-    except json.JSONDecodeError as e:
-        st.error(f"Error decoding JSON from {filepath}: {e}")
-        return []
-    except Exception as e:
-        st.error(f"Failed to load or process {filepath}: {e}")
-        return []
+def load_plant_care_data():
+    """Load sample plant care data"""
+    return SAMPLE_PLANT_CARE_DATA
 
 
 def find_care_instructions(plant_name_id, care_data, match_threshold=75):
@@ -665,7 +689,7 @@ def display_chat_interface(current_plant_care_info=None, plant_id_result=None): 
         can_chat = True
 
     # Check API Key availability AFTER determining if chat is possible
-    if can_chat and not GEMINI_API_KEY:
+    if can_chat and (not GEMINI_API_KEY or GEMINI_API_KEY == "your_gemini_api_key_here"):
         st.warning("Chat feature requires a Gemini API key.")
         return # Stop if chat is desired but key is missing
 
@@ -765,7 +789,7 @@ def main():
     # Initialize saved photos in session state if not already present
     if "saved_photos" not in st.session_state: st.session_state.saved_photos = {}
 
-    nav_choice_options = ["🆔 Identify New Plant", "🪴 My Saved Plants"]
+    nav_choice_options = ["🆔 Identify New Plant", "🪴 My Saved Plants", "📊 Plant Stats"]
     nav_index = 0 # Default to Identify page
 
     # --- Saved Plants Selector in Sidebar ---
@@ -796,7 +820,9 @@ def main():
 
         # Handle USER interaction with the selectbox
         if selected_saved_plant_sb != "-- Select to View --":
-            nav_index = 1 # Switch navigation focus to Saved Plants page
+            # If we're not in Plant Stats view, switch to Saved Plants view
+            if not st.session_state.get("viewing_plant_stats"):
+                nav_index = 1 # Switch navigation focus to Saved Plants page
             # Update the viewing state ONLY if the user selected something different
             if st.session_state.get("viewing_saved_details") != selected_saved_plant_sb:
                 st.session_state.viewing_saved_details = selected_saved_plant_sb
@@ -811,6 +837,9 @@ def main():
                  # Rerun to clear the details view from the main page
                  st.rerun()
 
+    # Check if we're viewing plant stats and set nav_index accordingly
+    if st.session_state.get("viewing_plant_stats"):
+        nav_index = 2  # Plant Stats view
 
     # --- Main Navigation Radio Buttons ---
     nav_choice = st.sidebar.radio(
@@ -832,7 +861,8 @@ def main():
         "saving_mode": False, "last_view": nav_choice_options[0],
         "viewing_saved_details": st.session_state.get("viewing_saved_details", None),
         "plant_id_result_for_care_check": None, # Initialize care check tracker
-        "suggestion_just_selected": False # **** ADD THIS FLAG ****
+        "suggestion_just_selected": False, # Flag for suggestion selection
+        "viewing_plant_stats": None # Initialize plant stats tracker
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -842,18 +872,16 @@ def main():
     # --- Check API Keys and Load Data ---
     api_keys_ok = True
     # Check the imported variables
-    if not PLANTNET_API_KEY:
-        st.error("PlantNet API Key is missing or invalid. Please check your .env file and api_config.py.")
+    if not PLANTNET_API_KEY or PLANTNET_API_KEY == "your_plantnet_api_key_here":
+        st.warning("PlantNet API Key is not set. Using demo mode with limited functionality.")
         api_keys_ok = False
-    if not GEMINI_API_KEY:
-        st.warning("Gemini API Key is missing or invalid. Chat functionality will be disabled. Please check your .env file and api_config.py.")
+    if not GEMINI_API_KEY or GEMINI_API_KEY == "your_gemini_api_key_here":
+        st.warning("Gemini API Key is not set. Chat functionality will be disabled.")
         # Don't set api_keys_ok to False here, identification can still work
 
     plant_care_data = load_plant_care_data()
     if not plant_care_data:
         # Error is shown in load_plant_care_data
-        st.stop()
-    if not api_keys_ok: # Stop if essential PlantNet key is missing
         st.stop()
 
 
@@ -866,7 +894,7 @@ def main():
         st.header("🔎 Identify a New Plant")
 
         # --- State Reset Logic ---
-        navigated_from_saved = st.session_state.last_view == "🪴 My Saved Plants"
+        navigated_from_saved = st.session_state.last_view in ["🪴 My Saved Plants", "📊 Plant Stats"]
         # Reset if coming FROM saved view and NOT currently viewing saved details
         if navigated_from_saved and st.session_state.get("viewing_saved_details") is None:
             print("DEBUG: Resetting state -> Switched to Identify View")
@@ -874,7 +902,7 @@ def main():
             keys_to_reset = ["plant_id_result", "plant_care_info", "current_chatbot_plant_name",
                              "suggestions", "uploaded_file_bytes", "uploaded_file_type",
                              "chat_history", "saving_mode", "plant_id_result_for_care_check",
-                             "suggestion_just_selected"] # Added flag reset
+                             "suggestion_just_selected", "viewing_plant_stats"] # Added plant stats reset
             for key in keys_to_reset:
                 if key in st.session_state: # Check if key exists before modifying
                    # Assign default values based on type
@@ -896,7 +924,8 @@ def main():
                  "current_chatbot_plant_name": None, "suggestions": None,
                  "uploaded_file_bytes": None, "uploaded_file_type": None, # Clear previous bytes/type too
                  "saving_mode": False, "plant_id_result_for_care_check": None, # Also reset care check flag
-                 "suggestion_just_selected": False # Reset flag on new upload
+                 "suggestion_just_selected": False, # Reset flag on new upload
+                 "viewing_plant_stats": None # Reset plant stats view
             })
         )
 
@@ -934,18 +963,32 @@ def main():
                 loader_placeholder = st.empty()
                 with loader_placeholder.container():
                     st.markdown("<div style='text-align:center;'><p><i>Identifying plant...</i></p></div>", unsafe_allow_html=True)
-                    # components.html(loading_animation_html, height=250) # Optional animation
 
-                try:
-                    result = identify_plant(st.session_state.uploaded_file_bytes)
+                # Demo mode if API key not set
+                if not api_keys_ok:
+                    # Simulate API call with random plant from our sample data
+                    import time
+                    time.sleep(2)  # Simulate API delay
+                    random_plant = random.choice(plant_care_data)
+                    result = {
+                        'scientific_name': random_plant.get('Scientific Name', 'Plantus demonstratus'),
+                        'common_name': random_plant.get('Plant Name', 'Demo Plant'),
+                        'confidence': random.uniform(70.0, 95.0)
+                    }
                     st.session_state.plant_id_result = result
-                    st.session_state.plant_id_result_for_care_check = None # Reset care check flag after new ID
-                    st.session_state.suggestion_just_selected = False # Ensure flag is False after new ID
-                except Exception as e:
-                    st.session_state.plant_id_result = {'error': f"Identification process failed: {str(e)}"}
-                finally:
-                    loader_placeholder.empty()
-                    st.rerun()
+                    st.session_state.plant_id_result_for_care_check = None
+                    st.session_state.suggestion_just_selected = False
+                else:
+                    try:
+                        result = identify_plant(st.session_state.uploaded_file_bytes)
+                        st.session_state.plant_id_result = result
+                        st.session_state.plant_id_result_for_care_check = None # Reset care check flag after new ID
+                        st.session_state.suggestion_just_selected = False # Ensure flag is False after new ID
+                    except Exception as e:
+                        st.session_state.plant_id_result = {'error': f"Identification process failed: {str(e)}"}
+                
+                loader_placeholder.empty()
+                st.rerun()
 
             # Display results, care info, etc. (if ID is done)
             elif st.session_state.plant_id_result is not None:
@@ -984,13 +1027,14 @@ def main():
                                         "nickname": save_nickname, "image": data_url,
                                         "id_result": st.session_state.plant_id_result,
                                         "care_info": st.session_state.plant_care_info, # Save None if not found
-                                        "chat_log": st.session_state.get("chat_history", []) # Save current chat
+                                        "chat_log": st.session_state.get("chat_history", []), # Save current chat
+                                        "moisture_level": random.randint(30, 90) # Add simulated moisture level
                                     }
                                     # Clear state *after* successful save
                                     keys_to_reset = ["plant_id_result", "plant_care_info", "current_chatbot_plant_name",
                                                      "suggestions", "uploaded_file_bytes", "uploaded_file_type",
                                                      "chat_history", "saving_mode", "plant_id_result_for_care_check",
-                                                     "suggestion_just_selected"] # Added flag reset
+                                                     "suggestion_just_selected", "viewing_plant_stats"] # Added plant stats reset
                                     for key in keys_to_reset:
                                         if key in st.session_state:
                                             default_val = [] if key == "chat_history" else (False if key in ["saving_mode", "suggestion_just_selected"] else None)
@@ -1058,13 +1102,6 @@ def main():
                         care_info_to_display = st.session_state.get('plant_care_info')
                         id_result_to_display = st.session_state.get('plant_id_result') # Use the ID currently in state
 
-                        # Debugging output can be helpful here:
-                        # st.write("--- Debug State Before Display ---")
-                        # st.write(f"Care Info to Display: {type(care_info_to_display)}")
-                        # st.write(f"ID Result to Display: {id_result_to_display}")
-                        # st.write(f"Suggestion Flag: {st.session_state.get('suggestion_just_selected')}") # Should be False now
-                        # st.write("--- End Debug State ---")
-
                         # --- Case 1: Care Info FOUND (or just selected via suggestion) ---
                         if care_info_to_display:
                             display_care_instructions(care_info_to_display)
@@ -1098,6 +1135,7 @@ def main():
                             st.info("You can still chat with the plant based on its general identification.")
                             # **** Pass None for care_info and the 'id_result_to_display' ****
                             display_chat_interface(current_plant_care_info=None, plant_id_result=id_result_to_display)
+                        #  plant_id_result=id_result_to_display)
                         # ===========================================================
                         # ===== END: ENSURE CORRECT DATA PASSED =====
                         # ===========================================================
@@ -1112,6 +1150,10 @@ def main():
     elif nav_choice == "🪴 My Saved Plants":
         st.header("🪴 My Saved Plant Profiles")
         st.session_state.last_view = "🪴 My Saved Plants" # Track view
+        
+        # Reset plant stats view when navigating to saved plants
+        if st.session_state.get("viewing_plant_stats"):
+            st.session_state.viewing_plant_stats = None
 
         saved_plant_nicknames = list(st.session_state.saved_photos.keys())
         nickname_to_view = st.session_state.get("viewing_saved_details")
@@ -1159,6 +1201,12 @@ def main():
                  st.session_state.plant_care_info = saved_care_info
                  st.session_state.suggestion_just_selected = False # Reset flag when loading saved details
 
+             # --- Add "Check Plant Stats" button ---
+             col1, col2 = st.columns([1, 1])
+             with col1:
+                 if st.button(f"📊 Check Plant Stats", key=f"stats_{nickname_to_view}", use_container_width=True):
+                     st.session_state.viewing_plant_stats = nickname_to_view
+                     st.rerun()
 
              # --- Display Care Instructions and Chat ---
              if saved_care_info:
@@ -1192,7 +1240,7 @@ def main():
                  keys_to_reset = ["plant_id_result", "plant_care_info", "current_chatbot_plant_name",
                                   "suggestions", "uploaded_file_bytes", "uploaded_file_type",
                                   "chat_history", "saving_mode", "plant_id_result_for_care_check",
-                                  "suggestion_just_selected"] # Added flag reset
+                                  "suggestion_just_selected", "viewing_plant_stats"] # Added plant stats reset
                  for key in keys_to_reset:
                      if key in st.session_state:
                          default_val = [] if key == "chat_history" else (False if key in ["saving_mode", "suggestion_just_selected"] else None)
@@ -1233,20 +1281,137 @@ def main():
                         # Sanitize key more robustly
                         safe_nickname_view = "".join(c if c.isalnum() else "_" for c in nickname)
                         view_card_key = f"view_card_{safe_nickname_view}"
-                        if st.button(f"View Full Details", key=view_card_key, use_container_width=True):
-                            st.session_state.viewing_saved_details = nickname
-                            st.rerun() # Rerun to show details view and update selectbox index
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            if st.button(f"View Details", key=view_card_key, use_container_width=True):
+                                st.session_state.viewing_saved_details = nickname
+                                st.rerun() # Rerun to show details view and update selectbox index
+                        with col2:
+                            stats_card_key = f"stats_card_{safe_nickname_view}"
+                            if st.button(f"📊 Stats", key=stats_card_key, use_container_width=True):
+                                st.session_state.viewing_plant_stats = nickname
+                                st.rerun()
                 col_index += 1
+
+    # ====================================
+    # ===== Plant Stats View =====
+    # ====================================
+    elif nav_choice == "📊 Plant Stats":
+        st.session_state.last_view = "📊 Plant Stats" # Track view
+        
+        # Get the plant nickname from session state
+        plant_nickname = st.session_state.get("viewing_plant_stats")
+        
+        if not plant_nickname or plant_nickname not in st.session_state.saved_photos:
+            st.warning("No plant selected for stats view. Please select a plant from your saved plants.")
+            if st.button("← Back to Saved Plants"):
+                st.session_state.viewing_plant_stats = None
+                st.rerun()
+        else:
+            # Get plant data
+            plant_data = st.session_state.saved_photos[plant_nickname]
+            
+            # Display plant stats
+            st.header(f"📊 Plant Stats: {plant_nickname}")
+            
+            # Back button
+            if st.button("← Back to Saved Plants"):
+                st.session_state.viewing_plant_stats = None
+                st.rerun()
+                
+            st.divider()
+            
+            # Display plant image
+            if plant_data.get("image"):
+                try:
+                    display_image_with_max_height(
+                        plant_data["image"],
+                        caption=f"{plant_nickname}",
+                        max_height_px=300
+                    )
+                except Exception as e:
+                    st.error(f"Error displaying plant image: {e}")
+            
+            # Display plant information
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("Plant Information")
+                
+                # Get ID result
+                id_result = plant_data.get("id_result", {})
+                scientific_name = id_result.get("scientific_name", "N/A")
+                common_name = id_result.get("common_name", "N/A")
+                
+                st.markdown(f"**Given Name:** {plant_nickname}")
+                st.markdown(f"**Scientific Name:** {scientific_name}")
+                st.markdown(f"**Common Name:** {common_name}")
+            
+            with col2:
+                st.subheader("Environmental Stats")
+                
+                # Display moisture level with progress bar
+                moisture_level = plant_data.get("moisture_level", random.randint(30, 90))
+                st.markdown("**Moisture Level:**")
+                
+                # Determine moisture status and color
+                if moisture_level < 30:
+                    moisture_status = "Low - Water needed!"
+                    moisture_color = "red"
+                elif moisture_level < 60:
+                    moisture_status = "Moderate"
+                    moisture_color = "orange"
+                else:
+                    moisture_status = "Good"
+                    moisture_color = "green"
+                
+                st.progress(moisture_level/100)
+                st.markdown(f"<span style='color:{moisture_color};'>{moisture_level}% ({moisture_status})</span>", unsafe_allow_html=True)
+                
+                # Display temperature information
+                st.markdown("**Temperature:**")
+                care_info = plant_data.get("care_info", {})
+                temp_range = care_info.get("Temperature Range", "Not specified") if care_info else "Not specified"
+                st.markdown(f"{temp_range}")
+            
+            st.divider()
+            
+            # Display care tips
+            if care_info:
+                st.subheader("Care Tips")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("**Light Requirements:**")
+                    st.caption(f"{care_info.get('Light Requirements', 'Not specified')}")
+                    
+                    st.markdown("**Watering Needs:**")
+                    st.caption(f"{care_info.get('Watering', 'Not specified')}")
+                
+                with col2:
+                    st.markdown("**Humidity Preferences:**")
+                    st.caption(f"{care_info.get('Humidity Preferences', 'Not specified')}")
+                    
+                    st.markdown("**Feeding Schedule:**")
+                    st.caption(f"{care_info.get('Feeding Schedule', 'Not specified')}")
+                
+                # Display additional care tips if available
+                additional_care = care_info.get('Additional Care')
+                if additional_care and isinstance(additional_care, str) and additional_care.strip():
+                    with st.expander("Additional Care Tips", expanded=True):
+                        st.markdown(additional_care)
+            else:
+                st.info("No specific care information available for this plant.")
 
 
 # --- Run the App ---
 if __name__ == "__main__":
     # Add a check for API keys loaded from config
-    if not PLANTNET_API_KEY:
-        st.error("CRITICAL ERROR: PlantNet API Key could not be loaded. Check .env file and api_config.py.")
-        st.stop()
-    if not GEMINI_API_KEY:
-        st.warning("Warning: Gemini API Key not loaded. Chat will be disabled.")
+    if not PLANTNET_API_KEY or PLANTNET_API_KEY == "your_plantnet_api_key_here":
+        st.warning("PlantNet API Key is not set. Using demo mode with limited functionality.")
+    if not GEMINI_API_KEY or GEMINI_API_KEY == "your_gemini_api_key_here":
+        st.warning("Gemini API Key is not set. Chat will be disabled.")
         # Allow app to run without Gemini for ID/Care lookup
 
     main()
