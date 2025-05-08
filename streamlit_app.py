@@ -21,8 +21,8 @@ from fuzzywuzzy import process
 
 # API Keys - Replace with your actual API keys
 # In a production app, use st.secrets or environment variables
-PLANTNET_API_KEY = st.secrets.get("PLANTNET_API_KEY", "your_plantnet_api_key_here")
-GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "your_gemini_api_key_here")
+PLANTNET_API_KEY = st.secrets.get("PLANTNET_API_KEY", "2b10X3YLMd8PNAuKOCVPt7MeUe")
+GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "AIzaSyCd-6N83gfhMx_-D4WCAc-8iOFSb6hDJ_Q")
 
 # Constants
 PLANTNET_URL = "https://my-api.plantnet.org/v2/identify/all"
