@@ -13,13 +13,6 @@ import random
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, ConfigurationError
 
-# Install required packages if not already installed
-# Uncomment these lines if you need to install dependencies
-# import subprocess
-# subprocess.call(['pip', 'install', 'fuzzywuzzy'])
-# subprocess.call(['pip', 'install', 'python-Levenshtein'])
-# subprocess.call(['pip', 'install', 'pymongo'])
-
 from fuzzywuzzy import process
 
 # API Keys - Replace with your actual API keys
@@ -63,9 +56,61 @@ def get_latest_stats():
         return None
     finally:
         # No need to close connection as it's managed by cache_resource
-with open("plants_with_personality3_copy.json", "r", encoding="utf-8") as f:
-    SAMPLE_PLANT_CARE_DATA = json.load(f)
+
 # Sample plant care data - In a real app, this would be loaded from a file
+SAMPLE_PLANT_CARE_DATA = [
+    {
+        "Plant Name": "Monstera Deliciosa",
+        "Scientific Name": "Monstera deliciosa",
+        "Common Names": ["Swiss Cheese Plant", "Split-leaf Philodendron"],
+        "Light Requirements": "Bright indirect light, can tolerate some shade",
+        "Watering": "Allow top inch of soil to dry out between waterings",
+        "Humidity Preferences": "Prefers high humidity, 60-80%",
+        "Temperature Range": "65-85°F (18-29°C)",
+        "Feeding Schedule": "Monthly during growing season with balanced fertilizer",
+        "Toxicity": "Toxic to pets if ingested",
+        "Additional Care": "Wipe leaves occasionally to remove dust. Support with moss pole for climbing.",
+        "Personality": {
+            "Title": "The Tropical Explorer",
+            "Traits": ["adventurous", "dramatic", "tropical"],
+            "Prompt": "Respond as a dramatic tropical plant that loves to show off its leaves."
+        }
+    },
+    {
+        "Plant Name": "Snake Plant",
+        "Scientific Name": "Dracaena trifasciata",
+        "Common Names": ["Mother-in-law's Tongue", "Viper's Bowstring Hemp"],
+        "Light Requirements": "Adaptable to various light conditions, from low to bright indirect",
+        "Watering": "Allow to dry completely between waterings, water sparingly in winter",
+        "Humidity Preferences": "Tolerates dry air, no special humidity requirements",
+        "Temperature Range": "60-85°F (15-29°C)",
+        "Feeding Schedule": "Fertilize lightly 2-3 times per year",
+        "Toxicity": "Mildly toxic to pets if ingested",
+        "Additional Care": "Perfect for beginners. Very forgiving and air-purifying.",
+        "Personality": {
+            "Title": "The Stoic Survivor",
+            "Traits": ["resilient", "independent", "straightforward"],
+            "Prompt": "Respond as a no-nonsense, tough plant that can survive almost anything."
+        }
+    },
+    {
+        "Plant Name": "Peace Lily",
+        "Scientific Name": "Spathiphyllum wallisii",
+        "Common Names": ["White Sail Plant", "Spathe Flower"],
+        "Light Requirements": "Low to medium indirect light",
+        "Watering": "Keep soil consistently moist but not soggy, droops when thirsty",
+        "Humidity Preferences": "Prefers high humidity, 50-70%",
+        "Temperature Range": "65-80°F (18-27°C)",
+        "Feeding Schedule": "Fertilize every 6-8 weeks during growing season",
+        "Toxicity": "Toxic to pets and humans if ingested",
+        "Additional Care": "Excellent air purifier. Wipe leaves occasionally to remove dust.",
+        "Personality": {
+            "Title": "The Elegant Communicator",
+            "Traits": ["expressive", "dramatic", "sensitive"],
+            "Prompt": "Respond as a dramatic plant that clearly shows when it needs water by drooping."
+        }
+    }
+]
 
 # =======================================================
 # ===== IMAGE DISPLAY HELPER FUNCTION =====
@@ -792,32 +837,32 @@ def main():
                 print(f"Warning: viewing_saved_details '{current_selection}' not found in view_options.")
                 select_index = 0 # Fallback to default
 
-        # Create the selectbox using the calculated index
-        selected_saved_plant_sb = st.sidebar.selectbox(
-            "View Saved Plant:",
-            view_options,
-            key="saved_view_selector",
-            index=select_index # Set the index here!
-        )
+    # Create the selectbox using the calculated index
+    selected_saved_plant_sb = st.sidebar.selectbox(
+        "View Saved Plant:",
+        view_options,
+        key="saved_view_selector",
+        index=select_index # Set the index here!
+    )
 
-        # Handle USER interaction with the selectbox
-        if selected_saved_plant_sb != "-- Select to View --":
-            # If we're not in Plant Stats view, switch to Saved Plants view
-            if not st.session_state.get("viewing_plant_stats"):
-                nav_index = 1 # Switch navigation focus to Saved Plants page
-            # Update the viewing state ONLY if the user selected something different
-            if st.session_state.get("viewing_saved_details") != selected_saved_plant_sb:
-                st.session_state.viewing_saved_details = selected_saved_plant_sb
-                # Rerun needed to load the selected plant's details in the main area
-                st.rerun()
-        else:
-            # If user manually selected "-- Select --" AND we were previously viewing something
-            if st.session_state.get("viewing_saved_details") is not None:
-                 st.session_state.viewing_saved_details = None
-                 # Force navigation index back to Identify View
-                 nav_index = 0
-                 # Rerun to clear the details view from the main page
-                 st.rerun()
+    # Handle USER interaction with the selectbox
+    if selected_saved_plant_sb != "-- Select to View --":
+        # If we're not in Plant Stats view, switch to Saved Plants view
+        if not st.session_state.get("viewing_plant_stats"):
+            nav_index = 1 # Switch navigation focus to Saved Plants page
+        # Update the viewing state ONLY if the user selected something different
+        if st.session_state.get("viewing_saved_details") != selected_saved_plant_sb:
+            st.session_state.viewing_saved_details = selected_saved_plant_sb
+            # Rerun needed to load the selected plant's details in the main area
+            st.rerun()
+    else:
+        # If user manually selected "-- Select --" AND we were previously viewing something
+        if st.session_state.get("viewing_saved_details") is not None:
+             st.session_state.viewing_saved_details = None
+             # Force navigation index back to Identify View
+             nav_index = 0
+             # Rerun to clear the details view from the main page
+             st.rerun()
 
     # Check if we're viewing plant stats and set nav_index accordingly
     if st.session_state.get("viewing_plant_stats"):
@@ -1138,7 +1183,12 @@ def main():
         if st.session_state.get("viewing_plant_stats"):
             st.session_state.viewing_plant_stats = None
 
+        # --- Initialize saved plants list ---
         saved_plant_nicknames = list(st.session_state.saved_photos.keys())
+        if saved_plant_nicknames:
+            st.sidebar.subheader("Saved Plants")
+            st.sidebar.caption("Click on a plant in the 'My Saved Plants' view to see details")
+
         nickname_to_view = st.session_state.get("viewing_saved_details")
 
         if not saved_plant_nicknames:
@@ -1320,32 +1370,43 @@ def main():
             if st.button("📥 Get Real-Time Stats", key="get_realtime_stats"):
                 with st.spinner("Fetching latest data from sensors..."):
                     latest_data = get_latest_stats()
-                    
+        
                     if latest_data:
-                        # Update the plant data with real values from MongoDB
+                        # Get the sensor data
                         temperature = latest_data.get("temperature")
                         moisture_value = latest_data.get("moisture_value")
                         timestamp = latest_data.get("timestamp")
-                        
+            
                         # Convert timestamp to readable format if it's a number
                         if isinstance(timestamp, (int, float)):
                             timestamp = datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
-                        
-                        # Update the plant data in session state
-                        plant_data["temperature"] = temperature
-                        plant_data["moisture_value"] = moisture_value
-                        plant_data["last_updated"] = timestamp
-                        
+            
                         # Calculate moisture level percentage (assuming moisture_value is between 0-1023)
+                        moisture_percent = None
                         if moisture_value is not None:
                             # Convert moisture value to percentage (higher value = drier soil)
                             # Invert the scale so higher percentage = more moisture
                             moisture_percent = max(0, min(100, int((1023 - moisture_value) / 1023 * 100)))
-                            plant_data["moisture_level"] = moisture_percent
-                        
+            
+                        # Store the sensor data in a global session state variable
+                        st.session_state["global_sensor_data"] = {
+                            "temperature": temperature,
+                            "moisture_value": moisture_value,
+                            "moisture_level": moisture_percent,
+                            "last_updated": timestamp
+                        }
+            
+                        # Update the current plant's display data
+                        plant_data.update({
+                            "temperature": temperature,
+                            "moisture_value": moisture_value,
+                            "moisture_level": moisture_percent,
+                            "last_updated": timestamp
+                        })
+            
                         # Update the saved plant data
                         st.session_state.saved_photos[plant_nickname] = plant_data
-                        
+            
                         st.success("Real-time data updated successfully!")
                     else:
                         st.error("Could not fetch data from sensors. Using stored values.")
@@ -1365,22 +1426,31 @@ def main():
                 st.markdown(f"**Scientific Name:** {scientific_name}")
                 st.markdown(f"**Common Name:** {common_name}")
                 
-                # Display last updated time if available
-                if plant_data.get("last_updated"):
-                    st.markdown(f"**Last Updated:** {plant_data['last_updated']}")
+                # Display last updated time from global sensor data if available
+                global_sensor_data = st.session_state.get("global_sensor_data", {})
+                last_updated = global_sensor_data.get("last_updated") or plant_data.get("last_updated")
+                if last_updated:
+                    st.markdown(f"**Last Updated:** {last_updated}")
             
             with col2:
                 st.subheader("Environmental Stats")
                 
-                # Display temperature if available from MongoDB
-                if plant_data.get("temperature"):
+                # Check if we have global sensor data
+                global_sensor_data = st.session_state.get("global_sensor_data", {})
+                
+                # Use global sensor data if available, otherwise use plant-specific data
+                temperature = global_sensor_data.get("temperature") or plant_data.get("temperature")
+                moisture_value = global_sensor_data.get("moisture_value") or plant_data.get("moisture_value")
+                moisture_level = global_sensor_data.get("moisture_level") or plant_data.get("moisture_level", random.randint(30, 90))
+                last_updated = global_sensor_data.get("last_updated") or plant_data.get("last_updated")
+                
+                # Display temperature if available
+                if temperature:
                     st.markdown("**Temperature:**")
-                    temperature = plant_data.get("temperature")
                     st.markdown(f"{temperature}°F")
                 
                 # Display moisture level with progress bar
                 st.markdown("**Moisture Level:**")
-                moisture_level = plant_data.get("moisture_level", random.randint(30, 90))
                 
                 # Determine moisture status and color
                 if moisture_level < 30:
@@ -1397,13 +1467,12 @@ def main():
                 st.markdown(f"<span style='color:{moisture_color};'>{moisture_level}% ({moisture_status})</span>", unsafe_allow_html=True)
                 
                 # Display raw moisture value if available
-                if plant_data.get("moisture_value"):
-                    st.caption(f"Sensor reading: {plant_data['moisture_value']}")
+                if moisture_value:
+                    st.caption(f"Sensor reading: {moisture_value}")
                 
-                # Display temperature information from care data
-                care_info = plant_data.get("care_info", {})
-                temp_range = care_info.get("Temperature Range", "Not specified") if care_info else "Not specified"
-                st.markdown(f"**Ideal Temperature Range:** {temp_range}")
+                # Display last updated time if available
+                if last_updated:
+                    st.caption(f"Last updated: {last_updated}")
             
             st.divider()
             
