@@ -13,6 +13,13 @@ import random
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, ConfigurationError
 
+# Install required packages if not already installed
+# Uncomment these lines if you need to install dependencies
+# import subprocess
+# subprocess.call(['pip', 'install', 'fuzzywuzzy'])
+# subprocess.call(['pip', 'install', 'python-Levenshtein'])
+# subprocess.call(['pip', 'install', 'pymongo'])
+
 from fuzzywuzzy import process
 
 # API Keys - Replace with your actual API keys
@@ -55,11 +62,33 @@ def get_latest_stats():
         st.warning(f"Error fetching data from MongoDB: {e}")
         return None
     finally:
-        print()# No need to close connection as it's managed by cache_resource
+        # No need to close connection as it's managed by cache_resource
 
-# Sample plant care data - In a real app, this would be loaded from a file
-with open("plants_with_personality3_copy.json", "r", encoding="utf-8") as f:
-    SAMPLE_PLANT_CARE_DATA = json.load(f)
+# Load plant care data from JSON file
+try:
+    with open("plants_with_personality3_copy.json", "r", encoding="utf-8") as f:
+        SAMPLE_PLANT_CARE_DATA = json.load(f)
+    print(f"Loaded {len(SAMPLE_PLANT_CARE_DATA)} plants from JSON file")
+except Exception as e:
+    print(f"Error loading plant data from JSON: {e}")
+    # Fallback to a minimal dataset if file loading fails
+    SAMPLE_PLANT_CARE_DATA = [
+        {
+            "Plant Name": "Demo Plant",
+            "Scientific Name": "Plantus demonstratus",
+            "Light Requirements": "Medium light",
+            "Watering": "Keep soil moist",
+            "Humidity Preferences": "Average humidity",
+            "Temperature Range": "65-80°F",
+            "Feeding Schedule": "Monthly during growing season",
+            "Toxicity": "Non-toxic",
+            "Personality": {
+                "Title": "The Demo Plant",
+                "Traits": ["helpful", "informative"],
+                "Prompt": "Respond as a friendly demo plant."
+            }
+        }
+    ]
 
 # =======================================================
 # ===== IMAGE DISPLAY HELPER FUNCTION =====
@@ -371,7 +400,10 @@ def chat_with_plant(care_info, conversation_history, id_result=None): # Add id_r
 
 @st.cache_data(show_spinner=False)
 def load_plant_care_data():
-    """Load sample plant care data"""
+    """Load plant care data"""
+    if not SAMPLE_PLANT_CARE_DATA:
+        st.error("Failed to load plant care data.")
+        return []
     return SAMPLE_PLANT_CARE_DATA
 
 
@@ -1090,7 +1122,6 @@ def main():
 
                         # --- Case 2: Care Info NOT Found ---
                         else:
-                            st.warning("Could not find specific care instructions or personality profile")
                             st.warning("Could not find specific care instructions or personality profile for this exact plant in our database.")
 
                             if st.session_state.suggestions is None:
