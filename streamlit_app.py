@@ -55,7 +55,7 @@ def get_latest_stats():
         st.warning(f"Error fetching data from MongoDB: {e}")
         return None
     finally:
-        # No need to close connection as it's managed by cache_resource
+        print()# No need to close connection as it's managed by cache_resource
 
 # Sample plant care data - In a real app, this would be loaded from a file
 with open("plants_with_personality3_copy.json", "r", encoding="utf-8") as f:
