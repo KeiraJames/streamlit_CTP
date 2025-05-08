@@ -10,12 +10,15 @@ from io import BytesIO
 import pytz
 from datetime import datetime
 import random
+from pymongo import MongoClient
+from pymongo.errors import ConnectionFailure, ConfigurationError
 
 # Install required packages if not already installed
 # Uncomment these lines if you need to install dependencies
 # import subprocess
 # subprocess.call(['pip', 'install', 'fuzzywuzzy'])
 # subprocess.call(['pip', 'install', 'python-Levenshtein'])
+# subprocess.call(['pip', 'install', 'pymongo'])
 
 from fuzzywuzzy import process
 
@@ -24,17 +27,45 @@ from fuzzywuzzy import process
 PLANTNET_API_KEY = st.secrets.get("PLANTNET_API_KEY", "2b10X3YLMd8PNAuKOCVPt7MeUe")
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "AIzaSyCd-6N83gfhMx_-D4WCAc-8iOFSb6hDJ_Q")
 
+# MongoDB Connection
+MONGO_URI = st.secrets.get("MONGO_URI", "mongodb+srv://recent:recent@cluster0.i7fqn.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+
 # Constants
 PLANTNET_URL = "https://my-api.plantnet.org/v2/identify/all"
 GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
 EASTERN_TZ = pytz.timezone('US/Eastern')
 
-# Sample plant care data - In a real app, this would be loaded from a file
+# MongoDB connection function
+@st.cache_resource(ttl=300)  # Cache the connection for 5 minutes
+def get_mongodb_client():
+    try:
+        client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+        # Verify connection works
+        client.admin.command('ping')
+        return client
+    except (ConnectionFailure, ConfigurationError) as e:
+        st.warning(f"MongoDB connection failed: {e}. Using demo mode for plant stats.")
+        return None
 
+# Get latest stats from MongoDB
+def get_latest_stats():
+    client = get_mongodb_client()
+    if not client:
+        return None
+    
+    try:
+        db = client['temp_moisture']
+        collection = db['c1']
+        latest_data = collection.find_one(sort=[('timestamp', -1)])
+        return latest_data
+    except Exception as e:
+        st.warning(f"Error fetching data from MongoDB: {e}")
+        return None
+    finally:
+        # No need to close connection as it's managed by cache_resource
 with open("plants_with_personality3_copy.json", "r", encoding="utf-8") as f:
     SAMPLE_PLANT_CARE_DATA = json.load(f)
-
-
+# Sample plant care data - In a real app, this would be loaded from a file
 
 # =======================================================
 # ===== IMAGE DISPLAY HELPER FUNCTION =====
@@ -108,16 +139,14 @@ def display_image_with_max_height(image_source, caption="", max_height_px=300, m
         img_style_str = "; ".join(img_styles) # Join styles with semicolons
 
         # Use a div with flexbox to ensure centering, especially if captions are long
-    
         html_string = f"""
-<div style="display: flex; justify-content: center; flex-direction: column; align-items: center; margin-bottom: 10px;">
-    <img src="{img_data_url}"
-         style="{img_style_str};"
-         alt="{caption or 'Uploaded image'}">
-    {f'<p style="text-align: center; font-size: 0.9em; color: grey; margin-top: 5px;">{caption}</p>' if caption else ""}
-</div>
-"""
-        
+        <div style="display: flex; justify-content: center; flex-direction: column; align-items: center; margin-bottom: 10px;">
+            <img src="{img_data_url}"
+                 style="{img_style_str};"
+                 alt="{caption or 'Uploaded image'}">
+            {f'<p style="text-align: center; font-size: 0.9em; color: grey; margin-top: 5px;">{caption}</p>' if caption else ""}
+        </div>
+        """
         st.markdown(html_string, unsafe_allow_html=True)
 # =======================================================
 
@@ -1067,6 +1096,7 @@ def main():
 
                         # --- Case 2: Care Info NOT Found ---
                         else:
+                            st.warning("Could not find specific care instructions or personality profile 
                             st.warning("Could not find specific care instructions or personality profile for this exact plant in our database.")
 
                             if st.session_state.suggestions is None:
@@ -1286,6 +1316,40 @@ def main():
                 except Exception as e:
                     st.error(f"Error displaying plant image: {e}")
             
+            # Add button to fetch real-time data from MongoDB
+            if st.button("📥 Get Real-Time Stats", key="get_realtime_stats"):
+                with st.spinner("Fetching latest data from sensors..."):
+                    latest_data = get_latest_stats()
+                    
+                    if latest_data:
+                        # Update the plant data with real values from MongoDB
+                        temperature = latest_data.get("temperature")
+                        moisture_value = latest_data.get("moisture_value")
+                        timestamp = latest_data.get("timestamp")
+                        
+                        # Convert timestamp to readable format if it's a number
+                        if isinstance(timestamp, (int, float)):
+                            timestamp = datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                        
+                        # Update the plant data in session state
+                        plant_data["temperature"] = temperature
+                        plant_data["moisture_value"] = moisture_value
+                        plant_data["last_updated"] = timestamp
+                        
+                        # Calculate moisture level percentage (assuming moisture_value is between 0-1023)
+                        if moisture_value is not None:
+                            # Convert moisture value to percentage (higher value = drier soil)
+                            # Invert the scale so higher percentage = more moisture
+                            moisture_percent = max(0, min(100, int((1023 - moisture_value) / 1023 * 100)))
+                            plant_data["moisture_level"] = moisture_percent
+                        
+                        # Update the saved plant data
+                        st.session_state.saved_photos[plant_nickname] = plant_data
+                        
+                        st.success("Real-time data updated successfully!")
+                    else:
+                        st.error("Could not fetch data from sensors. Using stored values.")
+            
             # Display plant information
             col1, col2 = st.columns(2)
             
@@ -1300,13 +1364,23 @@ def main():
                 st.markdown(f"**Given Name:** {plant_nickname}")
                 st.markdown(f"**Scientific Name:** {scientific_name}")
                 st.markdown(f"**Common Name:** {common_name}")
+                
+                # Display last updated time if available
+                if plant_data.get("last_updated"):
+                    st.markdown(f"**Last Updated:** {plant_data['last_updated']}")
             
             with col2:
                 st.subheader("Environmental Stats")
                 
+                # Display temperature if available from MongoDB
+                if plant_data.get("temperature"):
+                    st.markdown("**Temperature:**")
+                    temperature = plant_data.get("temperature")
+                    st.markdown(f"{temperature}°F")
+                
                 # Display moisture level with progress bar
-                moisture_level = plant_data.get("moisture_level", random.randint(30, 90))
                 st.markdown("**Moisture Level:**")
+                moisture_level = plant_data.get("moisture_level", random.randint(30, 90))
                 
                 # Determine moisture status and color
                 if moisture_level < 30:
@@ -1322,11 +1396,14 @@ def main():
                 st.progress(moisture_level/100)
                 st.markdown(f"<span style='color:{moisture_color};'>{moisture_level}% ({moisture_status})</span>", unsafe_allow_html=True)
                 
-                # Display temperature information
-                st.markdown("**Temperature:**")
+                # Display raw moisture value if available
+                if plant_data.get("moisture_value"):
+                    st.caption(f"Sensor reading: {plant_data['moisture_value']}")
+                
+                # Display temperature information from care data
                 care_info = plant_data.get("care_info", {})
                 temp_range = care_info.get("Temperature Range", "Not specified") if care_info else "Not specified"
-                st.markdown(f"{temp_range}")
+                st.markdown(f"**Ideal Temperature Range:** {temp_range}")
             
             st.divider()
             
@@ -1356,6 +1433,17 @@ def main():
                         st.markdown(additional_care)
             else:
                 st.info("No specific care information available for this plant.")
+                
+            # Add watering recommendation based on moisture level
+            st.divider()
+            st.subheader("Recommendations")
+            
+            if moisture_level < 30:
+                st.warning("⚠️ Your plant needs water soon! The soil is quite dry.")
+            elif moisture_level < 60:
+                st.info("💧 Moisture level is moderate. Check again in a day or two.")
+            else:
+                st.success("✅ Your plant is well-watered. No action needed at this time.")
 
 
 # --- Run the App ---
