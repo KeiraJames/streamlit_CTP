@@ -27,7 +27,7 @@ PLANTNET_URL = "https://my-api.plantnet.org/v2/identify/all"
 GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
 EASTERN_TZ = pytz.timezone('US/Eastern')
 
-with open('plants_with_personality3_copy.json', 'r') as f: 
+with open('plants_with_personality3_copy.json') as f: 
     SAMPLE_PLANT_CARE_DATA = json.load(f)
 
 # =======================================================
