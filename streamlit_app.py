@@ -481,10 +481,7 @@ def find_similar_plant_matches(id_result, plant_care_data, limit=3, score_thresh
     matches = {}
     for term in search_terms:
         if term:
-            # extract provides list of (match, score, index/key_if_processor_returns_it) tuples
-            # processor=None means it compares term against each choice directly.
-            # We want to match against the keys of all_db_plants_map
-            fuzz_results = process.extract(term, all_db_names, limit=limit*2) # Get more to filter
+            fuzz_results = process.extract(term, all_db_names, limit=limit*2) 
             for name, score in fuzz_results:
                 if score >= score_threshold:
                     matches[name] = max(matches.get(name, 0), score)
@@ -494,7 +491,6 @@ def find_similar_plant_matches(id_result, plant_care_data, limit=3, score_thresh
     for name, score in sorted_matches:
         plant_info = all_db_plants_map.get(name)
         if plant_info:
-            # Check actual plant object to avoid duplicates from different name keys mapping to same plant
             plant_identifier_for_dedupe = plant_info.get('Scientific Name', '') + plant_info.get('Plant Name', '')
             if plant_identifier_for_dedupe not in seen_plants_actual:
                 final_suggestions.append(plant_info)
@@ -581,30 +577,25 @@ def main():
         "viewing_saved_details": None, "plant_id_result_for_care_check": None,
         "suggestion_just_selected": False, "viewing_plant_stats": None,
         "viewing_home_page": True, "saved_photos": {},
-        "current_nav_choice": "🏠 Home" # For programmatic nav changes
+        "current_nav_choice": "🏠 Home" 
     }
     for key, value in defaults.items():
         if key not in st.session_state: st.session_state[key] = value
 
-    # Inject Ring CSS globally once
     st.markdown(get_ring_html_css(), unsafe_allow_html=True)
 
-    # --- Sidebar ---
     st.sidebar.title("📚 Plant Buddy")
     nav_choice_options = ["🏠 Home", "🆔 Identify New Plant", "🪴 My Saved Plants", "📊 Plant Stats"]
     
-    # Determine current index for radio button
     try:
         current_nav_index = nav_choice_options.index(st.session_state.current_nav_choice)
     except ValueError:
-        current_nav_index = 0 # Default to Home
+        current_nav_index = 0 
 
     nav_choice = st.sidebar.radio("Navigation", nav_choice_options, key="main_nav_radio", index=current_nav_index, label_visibility="collapsed")
     
-    # Update session state if radio button changes
     if nav_choice != st.session_state.current_nav_choice:
         st.session_state.current_nav_choice = nav_choice
-        # Reset view-specific states when changing main navigation
         if nav_choice == "🏠 Home":
             st.session_state.viewing_home_page = True
             st.session_state.viewing_saved_details = None
@@ -613,15 +604,11 @@ def main():
             st.session_state.viewing_home_page = False
             st.session_state.viewing_saved_details = None
             st.session_state.viewing_plant_stats = None
-            # Minimal reset for identify page, keep uploaded file if any
         elif nav_choice == "🪴 My Saved Plants":
             st.session_state.viewing_home_page = False
-            # Keep viewing_saved_details if already set, else None
             st.session_state.viewing_plant_stats = None
         elif nav_choice == "📊 Plant Stats":
             st.session_state.viewing_home_page = False
-            # Keep viewing_plant_stats if already set.
-            # If navigating directly, and no plant is selected for stats, it will show a message.
         st.rerun()
 
 
@@ -641,13 +628,12 @@ def main():
         if selected_saved_plant_sb != "-- Select to View --":
             if st.session_state.get("viewing_saved_details") != selected_saved_plant_sb:
                 st.session_state.viewing_saved_details = selected_saved_plant_sb
-                st.session_state.current_nav_choice = "🪴 My Saved Plants" # Switch to saved plants view
-                st.session_state.viewing_plant_stats = None # Clear stats view
+                st.session_state.current_nav_choice = "🪴 My Saved Plants" 
+                st.session_state.viewing_plant_stats = None 
                 st.rerun()
         elif st.session_state.get("viewing_saved_details") is not None and selected_saved_plant_sb == "-- Select to View --":
-            # User deselected a plant, go back to overview of saved plants or home
             st.session_state.viewing_saved_details = None
-            st.session_state.current_nav_choice = "🪴 My Saved Plants" # Stay on saved plants overview
+            st.session_state.current_nav_choice = "🪴 My Saved Plants" 
             st.rerun()
 
 
@@ -655,11 +641,10 @@ def main():
     api_keys_ok = not (not PLANTNET_API_KEY or PLANTNET_API_KEY == "your_plantnet_api_key_here")
 
     # ====================================
-    # ===== Home Page View =====
+    # ===== Home Page View (MODIFIED) =====
     # ====================================
     if st.session_state.current_nav_choice == "🏠 Home":
         st.header("🌿 Welcome to Plant Buddy!")
-        # ... (Welcome message and feature highlights as in your code) ...
         welcome_prompt = "You are Plant Buddy, a friendly plant care assistant. Give a warm, concise welcome (2-3 sentences) to a user of this app. Mention they can identify plants, get care tips, chat with their plants, and track plant health statistics."
         if "welcome_response" not in st.session_state:
             with st.spinner("Loading welcome..."):
@@ -670,7 +655,7 @@ def main():
         
         st.markdown(f"""<div style="background-color: #e6ffed; padding: 20px; border-radius: 10px; border-left: 5px solid #4CAF50; margin-bottom:20px;">
                         <h3 style="color: #2E7D32;">🌱 Hello Plant Lover!</h3>
-                        <p style="font-size: 1.1em;">{st.session_state.welcome_response}</p></div>""", unsafe_allow_html=True)
+                        <p style="font-size: 1.1em; color: #333333;">{st.session_state.welcome_response}</p></div>""", unsafe_allow_html=True) # Darker text
         
         st.subheader("🔍 What You Can Do")
         hc1, hc2 = st.columns(2)
@@ -689,17 +674,28 @@ def main():
 
         if st.session_state.saved_photos:
             st.divider()
+            st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True) # Centering wrapper start
             st.subheader("🪴 Your Recent Plants")
-            recent_plants = list(st.session_state.saved_photos.items())[-3:] # Last 3 added
-            recent_plants.reverse() # Show newest first
+            
+            recent_plants = list(st.session_state.saved_photos.items())[-3:]
+            recent_plants.reverse()
             if recent_plants:
-                cols = st.columns(len(recent_plants))
+                st.markdown("<div style='display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;'>", unsafe_allow_html=True)
+                num_display_plants = len(recent_plants)
+                cols = st.columns(num_display_plants)
+
                 for i, (nickname, plant_data) in enumerate(recent_plants):
                     with cols[i]:
-                        with st.container(border=True):
+                        with st.container(border=True, height=280): # Added fixed height
                             if plant_data.get("image"):
-                                st.image(plant_data["image"], use_container_width=True, caption=nickname)
-                            else: st.markdown(f"**{nickname}**")
+                                display_image_with_max_height(
+                                    plant_data["image"],
+                                    caption=nickname,
+                                    max_height_px=150 # Smaller image
+                                )
+                            else:
+                                st.markdown(f"**{nickname}**")
+
                             id_res = plant_data.get("id_result", {})
                             com_n = id_res.get('common_name', 'N/A')
                             if com_n and com_n != 'N/A' and com_n.lower() != nickname.lower() : st.caption(f"{com_n}")
@@ -708,7 +704,10 @@ def main():
                                 st.session_state.viewing_saved_details = nickname
                                 st.session_state.current_nav_choice = "🪴 My Saved Plants"
                                 st.rerun()
-            else: st.caption("No plants saved yet.")
+                st.markdown("</div>", unsafe_allow_html=True)
+            else:
+                st.caption("No plants saved yet.")
+            st.markdown("</div>", unsafe_allow_html=True)
 
 
     # ====================================
@@ -716,53 +715,49 @@ def main():
     # ====================================
     elif st.session_state.current_nav_choice == "🆔 Identify New Plant":
         st.header("🔎 Identify a New Plant")
-        # Reset logic if navigating from other views to a "fresh" identify page
         if st.session_state.last_view != "🆔 Identify New Plant" and not st.session_state.get("uploaded_file_bytes"):
             keys_to_clear_for_new_id = ["plant_id_result", "plant_care_info", "chat_history", "current_chatbot_plant_name", "suggestions", "saving_mode", "plant_id_result_for_care_check", "suggestion_just_selected"]
             for key in keys_to_clear_for_new_id: st.session_state[key] = None if key not in ["chat_history"] else []
-
         st.session_state.last_view = "🆔 Identify New Plant"
 
         uploaded_file = st.file_uploader(
             "Upload a clear photo of your plant:", type=["jpg", "jpeg", "png"],
-            key="plant_uploader_main",
-            help="Upload an image file (JPG, PNG).",
+            key="plant_uploader_main", help="Upload an image file (JPG, PNG).",
             on_change=lambda: st.session_state.update({
                  "plant_id_result": None, "plant_care_info": None, "chat_history": [],
                  "current_chatbot_plant_name": None, "suggestions": None,
                  "uploaded_file_bytes": None, "uploaded_file_type": None,
                  "saving_mode": False, "plant_id_result_for_care_check": None,
                  "suggestion_just_selected": False
-            }) # Reset on new file selection
+            })
         )
 
-        if uploaded_file is not None and st.session_state.uploaded_file_bytes is None: # New file just uploaded
+        if uploaded_file is not None and st.session_state.uploaded_file_bytes is None: 
             st.session_state.uploaded_file_bytes = uploaded_file.getvalue()
             st.session_state.uploaded_file_type = uploaded_file.type
-            st.rerun() # Rerun to process the new file
+            st.rerun() 
 
         if st.session_state.uploaded_file_bytes is not None:
             display_image_with_max_height(st.session_state.uploaded_file_bytes, "Your Uploaded Plant", 400)
             st.divider()
 
-            if st.session_state.plant_id_result is None: # Needs identification
+            if st.session_state.plant_id_result is None: 
                 with st.spinner("Identifying plant..."):
-                    if not api_keys_ok: # Demo mode
-                        time.sleep(1)
+                    if not api_keys_ok: 
+                        import time; time.sleep(1)
                         random_plant = random.choice(plant_care_data)
                         st.session_state.plant_id_result = {'scientific_name': random_plant.get('Scientific Name', 'Demo SciName'), 'common_name': random_plant.get('Plant Name', 'Demo Plant'), 'confidence': random.uniform(70,95)}
                     else:
                         st.session_state.plant_id_result = identify_plant(st.session_state.uploaded_file_bytes)
-                    st.session_state.plant_id_result_for_care_check = None # Reset for new ID
+                    st.session_state.plant_id_result_for_care_check = None 
                     st.session_state.suggestion_just_selected = False
                 st.rerun()
 
-            elif st.session_state.plant_id_result is not None: # ID result exists
+            elif st.session_state.plant_id_result is not None: 
                 current_id_result = st.session_state.plant_id_result
 
                 if st.session_state.saving_mode:
                     st.header("💾 Save This Plant Profile")
-                    # ... (Save mode UI - largely as before) ...
                     if st.session_state.uploaded_file_bytes: st.image(Image.open(BytesIO(st.session_state.uploaded_file_bytes)), width=150)
                     st.markdown(f"**Identified as:** {current_id_result.get('common_name','N/A')} (`{current_id_result.get('scientific_name','N/A')}`)")
                     with st.form("save_form_main"):
@@ -777,17 +772,16 @@ def main():
                                     "nickname": save_nickname, "image": f"data:{st.session_state.uploaded_file_type};base64,{encoded_img}",
                                     "id_result": current_id_result, "care_info": st.session_state.plant_care_info,
                                     "chat_log": st.session_state.get("chat_history", []),
-                                    "moisture_level": random.randint(30,90) # Simulated
+                                    "moisture_level": random.randint(30,90) 
                                 }
                                 st.success(f"Saved '{save_nickname}'!"); st.balloons()
-                                # Reset state after save
                                 for k in ["plant_id_result", "plant_care_info", "current_chatbot_plant_name", "suggestions", "uploaded_file_bytes", "uploaded_file_type", "chat_history", "saving_mode", "plant_id_result_for_care_check", "suggestion_just_selected"]:
                                     st.session_state[k] = None if k not in ["chat_history"] else []
-                                st.session_state.current_nav_choice = "🪴 My Saved Plants" # Go to saved plants
+                                st.session_state.current_nav_choice = "🪴 My Saved Plants" 
                                 st.session_state.viewing_saved_details = save_nickname
                                 st.rerun()
                     if st.button("❌ Cancel Save", key="cancel_save_main"): st.session_state.saving_mode = False; st.rerun()
-                else: # Not saving mode
+                else: 
                     display_identification_result(current_id_result)
                     if 'error' not in current_id_result:
                         care_info_current = st.session_state.get('plant_care_info')
@@ -797,27 +791,27 @@ def main():
                             found_care = find_care_instructions(current_id_result, plant_care_data)
                             st.session_state.plant_care_info = found_care
                             st.session_state.plant_id_result_for_care_check = current_id_result
-                            st.session_state.suggestions = None # Reset suggestions
-                            st.session_state.chat_history = []  # Reset chat for new ID/care
+                            st.session_state.suggestions = None 
+                            st.session_state.chat_history = []  
                             st.session_state.current_chatbot_plant_name = None
-                            st.rerun() # Rerun to reflect new care info or trigger suggestion search
+                            st.rerun() 
 
                         if st.session_state.suggestion_just_selected:
-                            st.session_state.suggestion_just_selected = False # Reset flag
+                            st.session_state.suggestion_just_selected = False 
 
-                        care_to_display = st.session_state.get('plant_care_info') # Get potentially updated care
+                        care_to_display = st.session_state.get('plant_care_info') 
                         
                         if care_to_display:
                             display_care_instructions(care_to_display)
                             st.button("💾 Save Plant Profile", key="save_id_care_btn", on_click=lambda: st.session_state.update({"saving_mode": True}))
                             st.divider()
                             display_chat_interface(current_plant_care_info=care_to_display, plant_id_result=current_id_result)
-                        else: # No specific care found
+                        else: 
                             st.warning("Could not find specific care instructions for this exact plant in our database.")
-                            if st.session_state.suggestions is None: # Need to find suggestions
+                            if st.session_state.suggestions is None: 
                                 st.session_state.suggestions = find_similar_plant_matches(current_id_result, plant_care_data)
-                                if st.session_state.suggestions is not None: # Avoid rerun if still None (e.g. no matches)
-                                     st.rerun() # Rerun to display suggestions
+                                if st.session_state.suggestions is not None: 
+                                     st.rerun() 
 
                             display_suggestion_buttons(st.session_state.suggestions)
                             st.divider()
@@ -848,9 +842,7 @@ def main():
 
             saved_id_result = entry.get("id_result")
             if saved_id_result: display_identification_result(saved_id_result)
-            # Sync session state for chat consistency IF NEEDED (but should be set by selectbox already)
             if st.session_state.get("plant_id_result") != saved_id_result: st.session_state.plant_id_result = saved_id_result
-            
             st.divider()
             
             saved_care_info = entry.get("care_info")
@@ -875,25 +867,40 @@ def main():
                     display_chat_interface(current_plant_care_info=None, plant_id_result=saved_id_result)
             
             st.divider()
-            with col_del_btn:
-                if st.button(f"🗑️ Delete '{nickname_to_view}'", key=f"del_btn_{nickname_to_view}", type="secondary", use_container_width=True):
-                    if st.checkbox(f"Confirm deletion of {nickname_to_view}", key=f"confirm_del_{nickname_to_view}"):
+            with col_del_btn: # Delete button in its own column for better layout
+                # Confirmation for delete
+                confirm_key = f"confirm_del_{nickname_to_view}"
+                if confirm_key not in st.session_state:
+                    st.session_state[confirm_key] = False
+
+                if st.session_state[confirm_key]:
+                    st.warning(f"Are you sure you want to delete '{nickname_to_view}'?")
+                    c1_del, c2_del = st.columns(2)
+                    if c1_del.button("Yes, Delete", key=f"yes_del_{nickname_to_view}", type="primary"):
                         del st.session_state.saved_photos[nickname_to_view]
                         st.session_state.viewing_saved_details = None
                         for k in ["plant_id_result", "plant_care_info", "current_chatbot_plant_name", "suggestions", "chat_history", "viewing_plant_stats"]:
                             st.session_state[k] = None if k not in ["chat_history"] else []
+                        st.session_state[confirm_key] = False # Reset confirmation
                         st.success(f"Deleted '{nickname_to_view}'.")
                         st.rerun()
+                    if c2_del.button("No, Cancel", key=f"no_del_{nickname_to_view}"):
+                        st.session_state[confirm_key] = False
+                        st.rerun()
+                else:
+                    if st.button(f"🗑️ Delete '{nickname_to_view}'", key=f"del_btn_{nickname_to_view}", type="secondary", use_container_width=True):
+                        st.session_state[confirm_key] = True
+                        st.rerun()
 
-        else: # Overview of all saved plants
+
+        else: 
             st.info("Select a plant from the 'View Saved Plant' dropdown in the sidebar to see its details, or browse below.")
             st.markdown("---")
-            # ... (Grid display logic - keep similar to your existing code) ...
             num_cols_grid = 3
             grid_cols = st.columns(num_cols_grid)
             for i, (nick, data) in enumerate(st.session_state.saved_photos.items()):
                 with grid_cols[i % num_cols_grid]:
-                    with st.container(border=True):
+                    with st.container(border=True, height=300): # Added fixed height
                         if data.get("image"): st.image(data["image"], use_container_width=True, caption=nick)
                         else: st.markdown(f"**{nick}**")
                         id_res_grid = data.get("id_result", {})
@@ -911,7 +918,7 @@ def main():
                                 st.rerun()
 
     # ====================================
-    # ===== Plant Stats View (INTEGRATED RINGS) =====
+    # ===== Plant Stats View (MODIFIED) =====
     # ====================================
     elif st.session_state.current_nav_choice == "📊 Plant Stats":
         st.session_state.last_view = "📊 Plant Stats"
@@ -919,80 +926,64 @@ def main():
 
         if not plant_nickname_for_stats or plant_nickname_for_stats not in st.session_state.saved_photos:
             st.warning("No plant selected for stats view. Please select a plant from 'My Saved Plants'.")
-            if st.button("← Back to Saved Plants", key="stats_back_to_saved_no_plant"):
+            if st.button("← Back to Saved Plants", key="stats_back_to_saved_no_plant_mod"):
                 st.session_state.current_nav_choice = "🪴 My Saved Plants"
                 st.session_state.viewing_plant_stats = None
                 st.rerun()
         else:
             plant_data_stats = st.session_state.saved_photos[plant_nickname_for_stats]
             st.header(f"📊 Plant Stats: {plant_nickname_for_stats}")
-            if st.button("← Back to Plant Details", key="stats_back_to_details"):
+            if st.button("← Back to Plant Details", key="stats_back_to_details_mod"):
                 st.session_state.current_nav_choice = "🪴 My Saved Plants"
-                st.session_state.viewing_saved_details = plant_nickname_for_stats # Ensure we go back to its details
+                st.session_state.viewing_saved_details = plant_nickname_for_stats
                 st.session_state.viewing_plant_stats = None
                 st.rerun()
             st.divider()
 
             # --- Display Rings ---
-            simulated_time_str = (datetime.now(EASTERN_TZ) - timedelta(minutes=random.randint(1,5))).strftime('%H:%M') # For watch face time
-
-            # 1. Moisture Ring
-            moisture_level_perc = plant_data_stats.get("moisture_level", random.randint(30,70)) # %
-            moisture_desc_ring = f"Current soil moisture is {moisture_level_perc}%. Ideal levels vary, but consistently very low or high may need attention."
+            simulated_time_str = (datetime.now(EASTERN_TZ) - timedelta(minutes=random.randint(1,5))).strftime('%H:%M')
+            moisture_level_perc = plant_data_stats.get("moisture_level", random.randint(30,70))
+            moisture_desc_ring = f"Current soil moisture is {moisture_level_perc}%. Ideal levels vary." # Shortened
             ring1_html = generate_ring_html("Moisture", str(moisture_level_perc), f"OF {MOISTURE_MAX_PERCENT}%", moisture_level_perc, MOISTURE_COLOR, MOISTURE_TRACK_COLOR, simulated_time_str, moisture_desc_ring, 0)
 
-            # 2. Temperature Ring
             care_info_stats = plant_data_stats.get("care_info", {})
             temp_range_str_stats = care_info_stats.get("Temperature Range", "65-85°F")
             min_f, max_f = parse_temp_range(temp_range_str_stats)
-            
-            current_temp_f_sim = TEMP_DISPLAY_MIN_F - 5 # Default to slightly below range if parsing fails
+            current_temp_f_sim = TEMP_DISPLAY_MIN_F - 5
             if min_f is not None and max_f is not None:
-                 # Simulate a temp, sometimes slightly outside ideal for visual variety
                 ideal_mid = (min_f + max_f) / 2
                 current_temp_f_sim = random.uniform(ideal_mid - 7, ideal_mid + 7)
-                current_temp_f_sim = round(max(TEMP_DISPLAY_MIN_F - 5, min(TEMP_DISPLAY_MAX_F + 5, current_temp_f_sim))) # Clamp near display range
-            else: # Fallback if parsing failed
-                current_temp_f_sim = random.randint(68, 78)
-
-
+                current_temp_f_sim = round(max(TEMP_DISPLAY_MIN_F - 5, min(TEMP_DISPLAY_MAX_F + 5, current_temp_f_sim)))
+            else: current_temp_f_sim = random.randint(68, 78)
             temp_progress = ((current_temp_f_sim - TEMP_DISPLAY_MIN_F) / (TEMP_DISPLAY_MAX_F - TEMP_DISPLAY_MIN_F)) * 100
-            temp_desc_ring = f"Ambient temp around {current_temp_f_sim}°F. Ideal: {temp_range_str_stats if temp_range_str_stats else 'N/A'}. Ring shows vs {TEMP_DISPLAY_MIN_F}-{TEMP_DISPLAY_MAX_F}°F."
+            temp_desc_ring = f"Ambient temp {current_temp_f_sim}°F. Ideal: {temp_range_str_stats if temp_range_str_stats else 'N/A'}." # Shortened
             ring2_html = generate_ring_html("Temperature", str(int(current_temp_f_sim)), "°F NOW", temp_progress, TEMPERATURE_COLOR, TEMPERATURE_TRACK_COLOR, simulated_time_str, temp_desc_ring, 1)
 
-            # 3. Data Freshness Ring ("Last Checked")
-            minutes_ago_sim = random.randint(1, FRESHNESS_MAX_MINUTES_AGO - 10) # Simulate recently checked
+            minutes_ago_sim = random.randint(1, FRESHNESS_MAX_MINUTES_AGO - 10)
             freshness_progress_sim = max(0, (1 - (minutes_ago_sim / FRESHNESS_MAX_MINUTES_AGO))) * 100
-            freshness_desc_ring = f"Stats notionally checked {minutes_ago_sim} min(s) ago. Regular checks help monitor conditions."
+            freshness_desc_ring = f"Stats checked {minutes_ago_sim} min(s) ago." # Shortened
             ring3_html = generate_ring_html("Last Check", str(minutes_ago_sim), "MINS AGO", freshness_progress_sim, FRESHNESS_COLOR, FRESHNESS_TRACK_COLOR, simulated_time_str, freshness_desc_ring, 2)
-            
+
             st.markdown(f'<div class="watch-face-grid">{ring1_html}{ring2_html}{ring3_html}</div>', unsafe_allow_html=True)
             st.divider()
             
-            # --- Display Plant Image and Basic Info (below rings) ---
-            img_col, info_col = st.columns([0.4, 0.6])
+            img_col, info_col = st.columns([0.4, 0.6]) 
             with img_col:
                 if plant_data_stats.get("image"):
-                    display_image_with_max_height(plant_data_stats["image"], caption=f"{plant_nickname_for_stats}", max_height_px=250)
+                    display_image_with_max_height(plant_data_stats["image"], max_height_px=250 )
             with info_col:
-                st.subheader("Plant Details")
+                st.subheader("Plant Identification") 
                 id_res_stats = plant_data_stats.get("id_result", {})
                 st.markdown(f"**Nickname:** {plant_nickname_for_stats}")
                 st.markdown(f"**Scientific Name:** `{id_res_stats.get('scientific_name', 'N/A')}`")
                 st.markdown(f"**Common Name:** `{id_res_stats.get('common_name', 'N/A')}`")
-
-            st.divider()
-            # Display care tips again (using smaller header)
-            if care_info_stats:
-                display_care_instructions(care_info_stats, header_level=4)
-            else:
-                st.info("No specific care information was saved for this plant.")
+                st.caption(f"Full care guide available on '{plant_nickname_for_stats}'s main profile page.")
 
 
 # --- Run the App ---
 if __name__ == "__main__":
     if not PLANTNET_API_KEY or PLANTNET_API_KEY == "your_plantnet_api_key_here":
-        st.sidebar.warning("PlantNet API Key missing. Identification uses demo data.", icon="🔑")
+        st.sidebar.warning("PlantNet API Key missing. Demo mode.", icon="🔑")
     if not GEMINI_API_KEY or GEMINI_API_KEY == "your_gemini_api_key_here":
-        st.sidebar.warning("Gemini API Key missing. Chat features disabled/limited.", icon="🔑")
+        st.sidebar.warning("Gemini API Key missing. Chat limited.", icon="🔑")
     main()
