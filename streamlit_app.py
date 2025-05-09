@@ -516,8 +516,8 @@ def display_identification_result(result):
 
     # Display using markdown with HTML for color styling
     st.markdown(f"""
-    - **Scientific Name:** `{result.get('scientific_name', 'N/A')}`
-    - **Common Name:** `{result.get('common_name', 'N/A')}`
+    - **Scientific Name:** \`{result.get('scientific_name', 'N/A')}\`
+    - **Common Name:** \`{result.get('common_name', 'N/A')}\`
     - **Confidence:** <strong style='color:{color};'>{conf:.1f}%</strong>
     """, unsafe_allow_html=True)
 
@@ -784,14 +784,49 @@ def display_chat_interface(current_plant_care_info=None, plant_id_result=None): 
 # --- Main App Logic ---
 def main():
     
+    # --- Initialize State Variables ---
+    defaults = {
+        "plant_id_result": None, "plant_care_info": None, "chat_history": [],
+        "current_chatbot_plant_name": None, "suggestions": None,
+        "uploaded_file_bytes": None, "uploaded_file_type": None,
+        "saving_mode": False, "last_view": "🏠 Home",  # Default to Home view
+        "viewing_saved_details": st.session_state.get("viewing_saved_details", None),
+        "plant_id_result_for_care_check": None, # Initialize care check tracker
+        "suggestion_just_selected": False, # Flag for suggestion selection
+        "viewing_plant_stats": None, # Initialize plant stats tracker
+        "viewing_home_page": st.session_state.get("viewing_home_page", True) # Initialize home page view
+    }
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
 
     # --- Sidebar Navigation and Saved Plants ---
     st.sidebar.title("📚 Plant Buddy")
     # Initialize saved photos in session state if not already present
     if "saved_photos" not in st.session_state: st.session_state.saved_photos = {}
 
-    nav_choice_options = ["🆔 Identify New Plant", "🪴 My Saved Plants", "📊 Plant Stats"]
-    nav_index = 0 # Default to Identify page
+    # Add Home to navigation options
+    nav_choice_options = ["🏠 Home", "🆔 Identify New Plant", "🪴 My Saved Plants", "📊 Plant Stats"]
+    nav_index = 0 # Default to Home page
+
+    # Update navigation index based on current view
+    if st.session_state.get("viewing_saved_details"):
+        nav_index = 2  # My Saved Plants view
+    elif st.session_state.get("viewing_plant_stats"):
+        nav_index = 3  # Plant Stats view
+    elif not st.session_state.get("viewing_home_page"):
+        nav_index = 1  # Identify New Plant view
+
+    # --- Main Navigation Radio Buttons ---
+    nav_choice = st.sidebar.radio(
+        "Navigation",
+        nav_choice_options,
+        key="main_nav_radio",
+        index=nav_index, # Use the potentially updated nav_index
+        label_visibility="collapsed" # Hide the "Navigation" label itself
+    )
+    st.sidebar.divider()
+    st.sidebar.caption("Powered by PlantNet & Gemini")
 
     # --- Saved Plants Selector in Sidebar ---
     saved_plant_nicknames = list(st.session_state.saved_photos.keys())
@@ -823,10 +858,11 @@ def main():
         if selected_saved_plant_sb != "-- Select to View --":
             # If we're not in Plant Stats view, switch to Saved Plants view
             if not st.session_state.get("viewing_plant_stats"):
-                nav_index = 1 # Switch navigation focus to Saved Plants page
+                nav_index = 2 # Switch navigation focus to Saved Plants page
             # Update the viewing state ONLY if the user selected something different
             if st.session_state.get("viewing_saved_details") != selected_saved_plant_sb:
                 st.session_state.viewing_saved_details = selected_saved_plant_sb
+                st.session_state.viewing_home_page = False  # Not on home page anymore
                 # Rerun needed to load the selected plant's details in the main area
                 st.rerun()
         else:
@@ -837,38 +873,6 @@ def main():
                  nav_index = 0
                  # Rerun to clear the details view from the main page
                  st.rerun()
-
-    # Check if we're viewing plant stats and set nav_index accordingly
-    if st.session_state.get("viewing_plant_stats"):
-        nav_index = 2  # Plant Stats view
-
-    # --- Main Navigation Radio Buttons ---
-    nav_choice = st.sidebar.radio(
-        "Navigation",
-        nav_choice_options,
-        key="main_nav_radio",
-        index=nav_index, # Use the potentially updated nav_index
-        label_visibility="collapsed" # Hide the "Navigation" label itself
-    )
-    st.sidebar.divider()
-    st.sidebar.caption("Powered by PlantNet & Gemini")
-
-
-    # --- Initialize State Variables ---
-    defaults = {
-        "plant_id_result": None, "plant_care_info": None, "chat_history": [],
-        "current_chatbot_plant_name": None, "suggestions": None,
-        "uploaded_file_bytes": None, "uploaded_file_type": None,
-        "saving_mode": False, "last_view": nav_choice_options[0],
-        "viewing_saved_details": st.session_state.get("viewing_saved_details", None),
-        "plant_id_result_for_care_check": None, # Initialize care check tracker
-        "suggestion_just_selected": False, # Flag for suggestion selection
-        "viewing_plant_stats": None # Initialize plant stats tracker
-    }
-    for key, value in defaults.items():
-        if key not in st.session_state:
-            st.session_state[key] = value
-
 
     # --- Check API Keys and Load Data ---
     api_keys_ok = True
@@ -885,14 +889,127 @@ def main():
         # Error is shown in load_plant_care_data
         st.stop()
 
-
     # --- Main Content Area based on Navigation ---
+
+    # ====================================
+    # ===== Home Page View =====
+    # ====================================
+    if nav_choice == "🏠 Home":
+        st.session_state.last_view = "🏠 Home"  # Track view
+        st.session_state.viewing_home_page = True
+        
+        # Reset other view states
+        if st.session_state.get("viewing_saved_details"):
+            st.session_state.viewing_saved_details = None
+        if st.session_state.get("viewing_plant_stats"):
+            st.session_state.viewing_plant_stats = None
+        
+        st.header("🌿 Welcome to Plant Buddy!")
+        
+        # Display welcome message using Gemini
+        welcome_message = {
+            "role": "user",
+            "content": "You are a plant assistant. Give a warm, friendly welcome to a user of the Plant Buddy app in 2-3 sentences. Mention that they can identify plants, get care tips, and track plant health."
+        }
+        
+        if "welcome_response" not in st.session_state:
+            with st.spinner("Loading welcome message..."):
+                try:
+                    system_prompt = """
+                    CONTEXT: You are providing a short welcome message (2-3 sentences maximum).
+                    TASK: Act as a friendly plant assistant welcoming users to the Plant Buddy app.
+                    
+                    RESPONSE RULES:
+                    1. Keep it warm and friendly.
+                    2. Mention plant identification, care tips, and health tracking features.
+                    3. Keep responses very concise (2-3 sentences max).
+                    """
+                    
+                    messages = [
+                        {"role": "user", "parts": [{"text": system_prompt}]},
+                        {"role": "model", "parts": [{"text": "I understand. I'll provide a warm, concise welcome message for Plant Buddy users."}]}
+                    ]
+                    
+                    messages.append({"role": "user", "parts": [{"text": welcome_message["content"]}]})
+                    
+                    response = send_message(messages)
+                    st.session_state.welcome_response = response
+                except Exception as e:
+                    st.session_state.welcome_response = "Welcome to Plant Buddy! Upload a plant photo to identify it, get care tips, and track its health. Happy gardening!"
+        
+        # Display the welcome message in a styled container
+        st.markdown("""
+        <div style="background-color: #f0f8f0; padding: 20px; border-radius: 10px; border-left: 5px solid #4CAF50;">
+            <h3 style="color: #2E7D32;">🌱 Hello Plant Lover!</h3>
+            <p style="font-size: 16px;">
+        """ + st.session_state.welcome_response + """
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Feature highlights
+        st.subheader("🔍 What You Can Do")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("### 🔎 Identify Plants")
+            st.markdown("Upload a photo of any plant to identify it using advanced AI technology.")
+            if st.button("Start Identifying", use_container_width=True):
+                st.session_state.viewing_home_page = False
+                st.rerun()
+        
+        with col2:
+            st.markdown("### 🪴 Track Your Plants")
+            st.markdown("Save your plants and monitor their health and care requirements.")
+            if st.button("View Saved Plants", use_container_width=True):
+                st.session_state.viewing_home_page = False
+                st.session_state.viewing_saved_details = None
+                nav_index = 2  # My Saved Plants view
+                st.rerun()
+        
+        # Display sample plants if available
+        if st.session_state.saved_photos and len(st.session_state.saved_photos) > 0:
+            st.divider()
+            st.subheader("Your Plant Collection")
+            
+            # Display up to 3 saved plants
+            saved_plant_nicknames = list(st.session_state.saved_photos.keys())[:3]
+            num_columns = min(len(saved_plant_nicknames), 3)
+            cols = st.columns(num_columns)
+            
+            for i, nickname in enumerate(saved_plant_nicknames):
+                plant_data = st.session_state.saved_photos.get(nickname)
+                if not plant_data:
+                    continue
+                
+                with cols[i]:
+                    with st.container(border=True):
+                        # Display image
+                        if plant_data.get("image"):
+                            try:
+                                st.image(plant_data["image"], use_container_width=True)
+                            except Exception:
+                                st.caption("Image error")
+                        st.markdown(f"**{nickname}**")
+                        
+                        # Button to view details
+                        safe_nickname_view = "".join(c if c.isalnum() else "_" for c in nickname)
+                        view_card_key = f"home_view_{safe_nickname_view}"
+                        
+                        if st.button(f"View Details", key=view_card_key, use_container_width=True):
+                            st.session_state.viewing_home_page = False
+                            st.session_state.viewing_saved_details = nickname
+                            st.rerun()
 
     # ====================================
     # ===== Identify New Plant View =====
     # ====================================
-    if nav_choice == "🆔 Identify New Plant":
+    elif nav_choice == "🆔 Identify New Plant":
         st.header("🔎 Identify a New Plant")
+        
+        # Update home page state
+        st.session_state.viewing_home_page = False
 
         # --- State Reset Logic ---
         navigated_from_saved = st.session_state.last_view in ["🪴 My Saved Plants", "📊 Plant Stats"]
@@ -1009,7 +1126,7 @@ def main():
                     id_info = st.session_state.get("plant_id_result", {})
                     sci_name = id_info.get('scientific_name', 'N/A')
                     com_name = id_info.get('common_name', 'N/A')
-                    st.markdown(f"**Identified as:** {com_name} (`{sci_name}`)")
+                    st.markdown(f"**Identified as:** {com_name} (\`{sci_name}\`)")
 
                     with st.form("save_form"):
                         save_nickname = st.text_input("Enter a nickname for this plant:", key="save_nickname_input")
@@ -1152,6 +1269,9 @@ def main():
         st.header("🪴 My Saved Plant Profiles")
         st.session_state.last_view = "🪴 My Saved Plants" # Track view
         
+        # Update home page state
+        st.session_state.viewing_home_page = False
+        
         # Reset plant stats view when navigating to saved plants
         if st.session_state.get("viewing_plant_stats"):
             st.session_state.viewing_plant_stats = None
@@ -1163,6 +1283,11 @@ def main():
             st.info("You haven't saved any plants yet. Go to 'Identify New Plant' to add some!")
         # If a specific plant IS selected for viewing:
         elif nickname_to_view and nickname_to_view in st.session_state.saved_photos:
+             # Add back button
+             if st.button("← Back to All Plants", key="back_to_all_plants"):
+                 st.session_state.viewing_saved_details = None
+                 st.rerun()
+                 
              st.subheader(f"Showing Details for: '{nickname_to_view}'")
              entry = st.session_state.saved_photos[nickname_to_view]
 
@@ -1301,6 +1426,9 @@ def main():
     elif nav_choice == "📊 Plant Stats":
         st.session_state.last_view = "📊 Plant Stats" # Track view
         
+        # Update home page state
+        st.session_state.viewing_home_page = False
+        
         # Get the plant nickname from session state
         plant_nickname = st.session_state.get("viewing_plant_stats")
         
@@ -1310,7 +1438,7 @@ def main():
                 st.session_state.viewing_plant_stats = None
                 st.rerun()
         else:
-            # Get plant data
+            # Get plant data - ensure we're getting the latest data from the session state
             plant_data = st.session_state.saved_photos[plant_nickname]
             
             # Display plant stats
