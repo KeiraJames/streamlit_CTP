@@ -27,44 +27,8 @@ PLANTNET_URL = "https://my-api.plantnet.org/v2/identify/all"
 GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
 EASTERN_TZ = pytz.timezone('US/Eastern')
 
-SAMPLE_PLANT_CARE_DATA = [
-    {
-        "Plant Name": "Monstera Deliciosa", "Scientific Name": "Monstera deliciosa",
-        "Common Names": ["Swiss Cheese Plant", "Split-leaf Philodendron"],
-        "Light Requirements": "Bright indirect light, can tolerate some shade",
-        "Watering": "Allow top inch of soil to dry out between waterings. Typically every 1-2 weeks.",
-        "Humidity Preferences": "Prefers high humidity, 60-80%. Mist regularly or use a humidifier.",
-        "Temperature Range": "65-85°F (18-29°C)",
-        "Feeding Schedule": "Monthly during growing season (spring/summer) with balanced liquid fertilizer.",
-        "Toxicity": "Toxic to pets (cats, dogs) and humans if ingested, causing oral irritation and vomiting.",
-        "Additional Care": "Wipe leaves occasionally to remove dust. Support with moss pole for climbing as it matures. Prune to maintain shape.",
-        "Personality": {"Title": "The Tropical Explorer", "Traits": ["adventurous", "dramatic", "showy"], "Prompt": "Respond as a dramatic tropical plant that loves to show off its large, fenestrated leaves and dreams of jungle adventures."}
-    },
-    {
-        "Plant Name": "Snake Plant", "Scientific Name": "Dracaena trifasciata",
-        "Common Names": ["Mother-in-law's Tongue", "Viper's Bowstring Hemp", "Saint George's Sword"],
-        "Light Requirements": "Highly adaptable. Tolerates low light to bright indirect light. Avoid direct, intense sun.",
-        "Watering": "Allow soil to dry out completely between waterings. Overwatering is a common issue. Water sparingly, especially in winter (every 1-2 months).",
-        "Humidity Preferences": "Tolerates dry air (average room humidity is fine). No special humidity requirements.",
-        "Temperature Range": "60-85°F (15-29°C). Can tolerate slightly cooler, but protect from frost.",
-        "Feeding Schedule": "Fertilize lightly 1-2 times during the growing season (spring/summer). Avoid feeding in winter.",
-        "Toxicity": "Mildly toxic to pets (cats, dogs) if ingested, may cause nausea or diarrhea.",
-        "Additional Care": "Excellent for beginners due to its hardiness. Known for air-purifying qualities. Can be top-heavy, so use a sturdy pot.",
-        "Personality": {"Title": "The Stoic Survivor", "Traits": ["resilient", "independent", "low-maintenance", "architectural"], "Prompt": "Respond as a no-nonsense, tough, and very independent plant that prides itself on surviving almost anything with minimal fuss. You're quietly confident."}
-    },
-    {
-        "Plant Name": "Peace Lily", "Scientific Name": "Spathiphyllum wallisii",
-        "Common Names": ["White Sail Plant", "Spathe Flower", "Cobra Plant"],
-        "Light Requirements": "Prefers low to medium indirect light. Can tolerate low light but may flower less. Avoid direct sunlight which can scorch leaves.",
-        "Watering": "Keep soil consistently moist but not waterlogged. Water when the top inch of soil feels dry. Known for drooping dramatically when thirsty, recovering quickly after watering.",
-        "Humidity Preferences": "Prefers high humidity (50-70%). Mist leaves regularly, use a pebble tray, or place near a humidifier, especially in dry environments.",
-        "Temperature Range": "65-80°F (18-27°C). Avoid cold drafts and sudden temperature changes.",
-        "Feeding Schedule": "Fertilize every 6-8 weeks during the growing season (spring/summer) with a balanced houseplant fertilizer diluted to half strength.",
-        "Toxicity": "Toxic to pets (cats, dogs) and humans if ingested. Contains calcium oxalate crystals, causing oral irritation, drooling, and difficulty swallowing.",
-        "Additional Care": "Excellent air purifier. Wipe leaves occasionally to remove dust and help with photosynthesis. Brown leaf tips can indicate low humidity or over-fertilization.",
-        "Personality": {"Title": "The Elegant Communicator", "Traits": ["expressive", "graceful", "sensitive", "purifying"], "Prompt": "Respond as an elegant and somewhat dramatic plant that clearly communicates its needs, especially for water by drooping gracefully. You value clean air and a peaceful environment."}
-    }
-]
+with open('plants_with_personality3_copy.json', 'r') as f: 
+    SAMPLE_PLANT_CARE_DATA = json.load(f)
 
 # =======================================================
 # ===== IMAGE DISPLAY HELPER FUNCTION =====
