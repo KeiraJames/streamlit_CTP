@@ -15,8 +15,8 @@ import re
 from fuzzywuzzy import process
 
 # --- API Keys ---
-PLANTNET_API_KEY = "2b10X3YLMd8PNAuKOCVPt7MeUe" # Replace with your actual key if different
-GEMINI_API_KEY = "AIzaSyCd-6N83gfhMx_-D4WCAc-8iOFSb6hDJ_Q"     # Replace with your actual key if different
+PLANTNET_API_KEY = "2b10X3YLMd8PNAuKOCVPt7MeUe" 
+GEMINI_API_KEY = "AIzaSyCd-6N83gfhMx_-D4WCAc-8iOFSb6hDJ_Q"
 # For actual deployment, use st.secrets:
 # PLANTNET_API_KEY = st.secrets.get("PLANTNET_API_KEY", "your_plantnet_api_key_here")
 # GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "your_gemini_api_key_here")
@@ -155,7 +155,7 @@ def identify_plant(image_bytes):
         if data.get("results"): return {'scientific_name': data["results"][0]["species"].get("scientificNameWithoutAuthor", "N/A"), 'common_name': (data["results"][0]["species"].get("commonNames") or ["N/A"])[0], 'confidence': round(data["results"][0].get("score",0)*100,1)}
         return {'error': "No plant matches found."}
     except requests.exceptions.Timeout: return {'error': "API request timed out"}
-    except requests.exceptions.RequestException as e: return {'error': f"Network/API error (PlantNet): {str(e).split(' পরিমান')[0]}"} # Basic attempt to shorten long errors
+    except requests.exceptions.RequestException as e: return {'error': f"Network/API error (PlantNet): {str(e).split(' পরিমান')[0]}"}
     except Exception as e: return {'error': f"Identification error: {e}"}
 
 def create_personality_profile(care_info):
@@ -168,25 +168,20 @@ def create_personality_profile(care_info):
 
 def send_message(messages):
     if not GEMINI_API_KEY or GEMINI_API_KEY == "your_gemini_api_key_here": return "Chat disabled: Gemini API Key missing."
-    payload = {"contents": messages, "generationConfig": {"maxOutputTokens": 150, "temperature": 0.7}} # Added temperature for creativity
+    payload = {"contents": messages, "generationConfig": {"maxOutputTokens": 150, "temperature": 0.7}}
     headers = {"Content-Type": "application/json"}
     try:
         r = requests.post(GEMINI_API_URL, json=payload, headers=headers, timeout=30); r.raise_for_status(); data = r.json()
         if data.get('candidates') and data['candidates'][0].get('content', {}).get('parts'): return data['candidates'][0]['content']['parts'][0]['text']
-        # Log unexpected structure for debugging if needed
-        # print(f"WARN: Unexpected Gemini response structure: {data}")
         return "Sorry, I received an unexpected response from the chat model."
     except requests.exceptions.Timeout: return "Sorry, the request to the chat model timed out."
     except requests.exceptions.RequestException as e:
         err_detail = "";
         if hasattr(e, 'response') and e.response is not None:
             try: err_detail = e.response.json().get('error', {}).get('message', e.response.text)
-            except: err_detail = e.response.text # Fallback if response is not JSON
-        # print(f"ERROR: Gemini API RequestException: {e} | Detail: {err_detail}")
+            except: err_detail = e.response.text
         return f"Sorry, I'm having trouble connecting to the chat model right now. (Details: {err_detail or str(e)})"
-    except Exception as e: # Catch any other unexpected errors
-        # print(f"ERROR: Unexpected error in send_message: {e}")
-        return f"Oops, something unexpected went wrong while trying to chat."
+    except Exception as e: return f"Oops, something unexpected went wrong while trying to chat."
 
 def chat_with_plant(care_info, conversation_history, id_result=None):
     if not GEMINI_API_KEY or GEMINI_API_KEY == "your_gemini_api_key_here": return "Chat feature disabled: Gemini API Key not set."
@@ -207,10 +202,8 @@ def chat_with_plant(care_info, conversation_history, id_result=None):
     messages_for_api = [{"role": "user", "parts": [{"text": sys_prompt}]}, 
                         {"role": "model", "parts": [{"text": f"Understood. I am {plant_name}. Ask away!"}]}]
     
-    # Add conversation history. Gemini expects alternating user/model roles.
-    # The history already has user/assistant(model) roles.
     for entry in [m for m in conversation_history if isinstance(m, dict) and "role" in m and "content" in m]:
-        api_role = "model" if entry["role"] in ["assistant", "model"] else "user" # Ensure correct mapping
+        api_role = "model" if entry["role"] in ["assistant", "model"] else "user"
         messages_for_api.append({"role": api_role, "parts": [{"text": str(entry["content"])}]})
         
     return send_message(messages_for_api)
@@ -258,8 +251,20 @@ def find_similar_plant_matches(id_r, care_data, limit=3, score_thresh=60):
     if not id_r or 'error' in id_r or not care_data: return []
     db_map = {k.lower().strip():v for p_obj in care_data for k,v in [(name, p_obj) for name_list in [ [p_obj.get('Scientific Name','')], [p_obj.get('Plant Name','')], p_obj.get('Common Names',[]) if isinstance(p_obj.get('Common Names',[]), list) else [p_obj.get('Common Names',[])] ] for name in name_list if isinstance(name, str) and name.strip() ] if k.lower().strip()}
     if not db_map: return []
+    
     terms = [id_r.get(s,'').lower().strip() for s in ['scientific_name','common_name']]
-    matches = {name:max(matches.get(name,0),score) for term in terms if term for name,score in process.extract(term,db_map.keys(),limit=limit*2) if score >= score_thresh}
+    
+    # --- FIX for UnboundLocalError ---
+    matches = {} 
+    # --- END OF FIX ---
+
+    for term in terms:
+        if term:
+            fuzz_results = process.extract(term, db_map.keys(), limit=limit*2) 
+            for name, score in fuzz_results:
+                if score >= score_thresh:
+                    matches[name] = max(matches.get(name, 0), score)
+    
     final_sugg, seen_p = [], set()
     for name,score in sorted(matches.items(),key=lambda x:x[1],reverse=True):
         p_info=db_map.get(name)
@@ -267,6 +272,7 @@ def find_similar_plant_matches(id_r, care_data, limit=3, score_thresh=60):
             final_sugg.append(p_info); seen_p.add(p_id)
             if len(final_sugg) >= limit: break
     return final_sugg
+
 
 def display_suggestion_buttons(suggestions):
      if not suggestions: return
@@ -281,7 +287,7 @@ def display_suggestion_buttons(suggestions):
             st.session_state.update({
                 'plant_care_info': p_info,
                 'plant_id_result': new_id_result,
-                'plant_id_result_for_care_check': new_id_result, # Critically update this
+                'plant_id_result_for_care_check': new_id_result,
                 'suggestions': None, 'chat_history': [], 'current_chatbot_plant_name': None, 'suggestion_just_selected': True
             })
             st.rerun()
@@ -320,18 +326,16 @@ def display_chat_interface(current_plant_care_info=None, plant_id_result=None):
             if role == "user": st.markdown(f'<div class="message-container"><div class="user-message">{content}<div class="message-meta">You • {time}</div></div></div>', unsafe_allow_html=True)
             elif role in ["assistant", "model"]: st.markdown(f'<div class="message-container"><div class="bot-message">🌿 {content}<div class="message-meta">{chatbot_name} • {time}</div></div></div>', unsafe_allow_html=True)
 
-    chat_input_key = f"chat_input_{''.join(c if c.isalnum() else '_' for c in chatbot_name)}"
+    chat_input_key = f"chat_input_{''.join(c if c.isalnum() else '_' for c in chatbot_name)}" # Stable key
     
     if prompt := st.chat_input(f"Ask {chatbot_name}...", key=chat_input_key):
         timestamp = datetime.now(EASTERN_TZ).strftime("%H:%M")
         st.session_state.chat_history.append({"role": "user", "content": prompt, "time": timestamp})
-        # Set a flag to indicate a new user message needs processing
         st.session_state.new_user_message_to_process = True 
-        st.rerun() # Rerun to display user message and trigger bot response
+        st.rerun() 
 
-    # Process bot response if there's a new user message flag
     if st.session_state.get("new_user_message_to_process", False):
-        st.session_state.new_user_message_to_process = False # Reset flag
+        st.session_state.new_user_message_to_process = False 
         with st.spinner(f"{chatbot_name} is thinking..."):
             bot_response = chat_with_plant(current_plant_care_info, st.session_state.chat_history, plant_id_result)
         
@@ -352,7 +356,7 @@ def main():
         "viewing_saved_details": None, "plant_id_result_for_care_check": None,
         "suggestion_just_selected": False, "viewing_plant_stats": None,
         "viewing_home_page": True, "saved_photos": {}, "current_nav_choice": "🏠 Home",
-        "new_user_message_to_process": False # For chat
+        "new_user_message_to_process": False 
     }
     for k,v in defaults.items():
         if k not in st.session_state: st.session_state[k] = v
@@ -370,14 +374,14 @@ def main():
         if nav_choice != "🪴 My Saved Plants": st.session_state.viewing_saved_details = None
         if nav_choice != "📊 Plant Stats": st.session_state.viewing_plant_stats = None
         if nav_choice == "🆔 Identify New Plant" and not st.session_state.get("uploaded_file_bytes"):
-             for key_to_reset in ["plant_id_result", "plant_care_info", "chat_history", "current_chatbot_plant_name", "suggestions", "saving_mode", "plant_id_result_for_care_check", "suggestion_just_selected"]:
-                st.session_state[key_to_reset] = [] if key_to_reset == "chat_history" else None
+             for key_to_reset in ["plant_id_result", "plant_care_info", "chat_history", "current_chatbot_plant_name", "suggestions", "saving_mode", "plant_id_result_for_care_check", "suggestion_just_selected", "new_user_message_to_process"]:
+                st.session_state[key_to_reset] = [] if key_to_reset == "chat_history" else (False if key_to_reset == "new_user_message_to_process" else None)
+
         st.rerun()
 
     st.sidebar.divider(); st.sidebar.caption("Powered by PlantNet & Gemini")
     if st.session_state.saved_photos:
         st.sidebar.subheader("Saved Plants")
-        # Add a unique key for the selectbox to prevent issues if items change
         selectbox_key = f"saved_plant_selector_{len(st.session_state.saved_photos)}"
         saved_opts = ["-- Select --"] + list(st.session_state.saved_photos.keys())
         sel_saved_idx = saved_opts.index(st.session_state.viewing_saved_details) if st.session_state.viewing_saved_details in saved_opts else 0
@@ -414,17 +418,14 @@ def main():
         if hc2.button("💚 Go to My Plants",use_container_width=True): st.session_state.current_nav_choice="🪴 My Saved Plants"; st.rerun()
 
         if st.session_state.saved_photos:
-            st.divider(); st.subheader("🪴 Your Recently Saved Plants") # Changed wording
-            # Sort by a 'saved_timestamp' if you add it, otherwise by insertion order (dict behavior in Python 3.7+)
-            # For simplicity, let's assume insertion order is recent enough for now.
-            # To get truly "recent", you'd need to store a timestamp when saving.
-            recent_keys = list(st.session_state.saved_photos.keys())[-3:] # Get last 3 keys
-            recent_plants = {key: st.session_state.saved_photos[key] for key in recent_keys}
-            if recent_plants:
-                cols_home = st.columns(len(recent_plants))
-                for i, (nick, p_data) in enumerate(reversed(list(recent_plants.items()))): # Show newest first
+            st.divider(); st.subheader("🪴 Your Recently Saved Plants") 
+            recent_keys = list(st.session_state.saved_photos.keys())[-3:] 
+            recent_plants_data = {key: st.session_state.saved_photos[key] for key in recent_keys} # Create a new dict
+            if recent_plants_data: # Check if the new dict is not empty
+                cols_home = st.columns(len(recent_plants_data))
+                for i, (nick, p_data) in enumerate(reversed(list(recent_plants_data.items()))): # Iterate over the new dict
                     with cols_home[i]:
-                        with st.container(border=True, height=300): # Adjusted height
+                        with st.container(border=True, height=300): # Reverted to st.image
                             if p_data.get("image"): st.image(p_data["image"], caption=nick, use_container_width=True)
                             else: st.markdown(f"**{nick}**")
                             id_res = p_data.get("id_result", {})
@@ -481,10 +482,16 @@ def main():
                             st.divider(); display_chat_interface(current_plant_care_info=care_to_disp, plant_id_result=curr_id_res)
                         else: 
                             st.warning("No specific care instructions found.")
-                            if st.session_state.suggestions is None: st.session_state.suggestions=find_similar_plant_matches(curr_id_res,care_data); 
-                            if st.session_state.suggestions is None: st.caption("No similar plants found in DB.") # Avoid rerun if suggestions still None
-                            else: st.rerun() # Rerun only if suggestions were found
-                            display_suggestion_buttons(st.session_state.suggestions)
+                            if st.session_state.suggestions is None: 
+                                st.session_state.suggestions=find_similar_plant_matches(curr_id_res,care_data)
+                                # Check if suggestions are still None to avoid infinite rerun if no matches found
+                                if st.session_state.suggestions is not None and len(st.session_state.suggestions) > 0 : 
+                                    st.rerun() # Rerun only if suggestions were found and are not empty
+                                elif st.session_state.suggestions is None or len(st.session_state.suggestions) == 0 :
+                                    st.caption("No similar plants found in our database.") # Show message if no suggestions
+                                    st.session_state.suggestions = [] # Ensure it's an empty list not None to prevent re-triggering
+
+                            display_suggestion_buttons(st.session_state.suggestions) # This will now handle empty list correctly
                             st.divider(); st.button("💾 Save ID Only",key="save_id_only",on_click=lambda:st.session_state.update({'saving_mode':True}))
                             st.divider(); st.info("Chat based on general ID."); display_chat_interface(plant_id_result=curr_id_res)
 
@@ -558,7 +565,7 @@ def main():
             
             care_s = p_data_stats.get("care_info"); 
             if not isinstance(care_s, dict): care_s = {} 
-            temp_rng_s = care_s.get("Temperature Range", "65-85°F")
+            temp_rng_s = care_s.get("Temperature Range", "65-85°F") 
             min_f,max_f = parse_temp_range(temp_rng_s)
 
             curr_temp_s=TEMP_DISPLAY_MIN_F-5
@@ -571,7 +578,6 @@ def main():
             st.markdown(f'<div class="watch-face-grid">{r1}{r2}{r3}</div>',unsafe_allow_html=True); st.divider()
             
             img_c,info_c=st.columns([0.4,0.6])
-            # Added toggle for showing image on stats page
             show_image_stats = img_c.toggle("Show Image", value=True, key=f"show_img_stats_{p_nick_stats}")
             if show_image_stats:
                  if p_data_stats.get("image"): display_image_with_max_height(p_data_stats["image"],max_height_px=250)
@@ -582,7 +588,6 @@ def main():
 
 # --- Run the App ---
 if __name__ == "__main__":
-    # Use st.secrets in production. For local testing, direct assignment is okay but not recommended for shared code.
     if not PLANTNET_API_KEY or PLANTNET_API_KEY == "your_plantnet_api_key_here": 
         st.sidebar.warning("PlantNet Key missing or placeholder. Demo mode for ID.",icon="🔑")
     if not GEMINI_API_KEY or GEMINI_API_KEY == "your_gemini_api_key_here": 
