@@ -15,8 +15,8 @@ import re
 from fuzzywuzzy import process
 
 # --- API Keys ---
-PLANTNET_API_KEY = st.secrets.get("PLANTNET_API_KEY", "2b10X3YLMd8PNAuKOCVPt7MeUe")
-GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "AIzaSyCd-6N83gfhMx_-D4WCAc-8iOFSb6hDJ_Q")
+PLANTNET_API_KEY = st.secrets.get("PLANTNET_API_KEY", "your_plantnet_api_key_here")
+GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "your_gemini_api_key_here")
 
 # --- Constants ---
 PLANTNET_URL = "https://my-api.plantnet.org/v2/identify/all"
@@ -195,7 +195,7 @@ def chat_with_plant(care_info, conversation_history, id_result=None):
     else: return "Sorry, not enough info to chat."
     sys_prompt = "\n".join(prompt_parts + rules)
     messages = [{"role": "user", "parts": [{"text": sys_prompt}]}, {"role": "model", "parts": [{"text": f"Understood. I am {plant_name}. Ask away!"}]}]
-    for entry in [m for m in conversation_history if isinstance(m, dict) and "role" in m and "content" in m]:
+    for entry in [m for m in conversation_history if isinstance(m, dict) and "role" in m and "content" in m]: # Ensure full history is passed
         messages.append({"role": "model" if entry["role"] in ["assistant", "model"] else "user", "parts": [{"text": str(entry["content"])}]})
     return send_message(messages)
 
@@ -264,9 +264,11 @@ def display_suggestion_buttons(suggestions):
             st.session_state.update({
                 'plant_care_info': p_info,
                 'plant_id_result': {'scientific_name':p_info.get('Scientific Name','N/A'), 'common_name':p_name, 'confidence':100.0},
-                'plant_id_result_for_care_check': st.session_state.plant_id_result, # Should be new id result
+                # 'plant_id_result_for_care_check': st.session_state.plant_id_result, # This should be the new id_result
                 'suggestions': None, 'chat_history': [], 'current_chatbot_plant_name': None, 'suggestion_just_selected': True
             })
+            # Ensure plant_id_result_for_care_check is updated AFTER plant_id_result
+            st.session_state.plant_id_result_for_care_check = st.session_state.plant_id_result
             st.rerun()
 
 def display_chat_interface(current_plant_care_info=None, plant_id_result=None):
@@ -287,52 +289,62 @@ def display_chat_interface(current_plant_care_info=None, plant_id_result=None):
     st.subheader(f"💬 Chat with {chatbot_name}")
     st.markdown("""<style>.message-container{padding:1px 5px}.user-message{background:#0b81fe;color:white;border-radius:18px 18px 0 18px;padding:8px 14px;margin:3px 0 3px auto;width:fit-content;max-width:80%;word-wrap:break-word;box-shadow:0 1px 2px rgba(0,0,0,.1);animation:fadeIn .3s ease-out}.bot-message{background:#e5e5ea;color:#000;border-radius:18px 18px 18px 0;padding:8px 14px;margin:3px auto 3px 0;width:fit-content;max-width:80%;word-wrap:break-word;box-shadow:0 1px 2px rgba(0,0,0,.05);animation:fadeIn .3s ease-out}.message-meta{font-size:.7rem;color:#777;margin-top:3px}.bot-message .message-meta{text-align:left;color:#555}.user-message .message-meta{text-align:right}@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}.stChatInputContainer{position:sticky;bottom:0;background:white;padding-top:10px;z-index:99}</style>""", unsafe_allow_html=True)
 
-    # Chat history and context management
     if "chat_history" not in st.session_state: st.session_state.chat_history = []
     if st.session_state.get("current_chatbot_plant_name") != chatbot_name:
-        # print(f"DEBUG: Chat context changed from '{st.session_state.get('current_chatbot_plant_name')}' to '{chatbot_name}'. Resetting history.")
         if st.session_state.get("viewing_saved_details"):
              saved_data = st.session_state.saved_photos.get(st.session_state.viewing_saved_details)
              st.session_state.chat_history = saved_data.get('chat_log', []) if saved_data else []
         else:
-            st.session_state.chat_history = [] # Start fresh
+            st.session_state.chat_history = []
         st.session_state.current_chatbot_plant_name = chatbot_name
 
-    chat_container = st.container(height=350) # Adjusted height
+    chat_container = st.container(height=350)
     with chat_container:
         for msg in st.session_state.chat_history:
             role, content, time = msg.get("role"), msg.get("content", ""), msg.get("time", "")
             if role == "user": st.markdown(f'<div class="message-container"><div class="user-message">{content}<div class="message-meta">You • {time}</div></div></div>', unsafe_allow_html=True)
             elif role in ["assistant", "model"]: st.markdown(f'<div class="message-container"><div class="bot-message">🌿 {content}<div class="message-meta">{chatbot_name} • {time}</div></div></div>', unsafe_allow_html=True)
 
-    # Stable key for chat_input based on the chatbot's name
-    chat_input_key = f"chat_input_{''.join(c if c.isalnum() else '_' for c in chatbot_name)}"
+    chat_input_key = f"chat_input_{''.join(c if c.isalnum() else '_' for c in chatbot_name)}" # Stable key
     
     if prompt := st.chat_input(f"Ask {chatbot_name}...", key=chat_input_key):
         timestamp = datetime.now(EASTERN_TZ).strftime("%H:%M")
         st.session_state.chat_history.append({"role": "user", "content": prompt, "time": timestamp})
-        # Don't rerun immediately, let the processing block handle it
-
-    # Process bot response if last message was from user
+        # Rerun will happen naturally after this block if a bot response is added
+    
     if st.session_state.chat_history and st.session_state.chat_history[-1]["role"] == "user":
-        # This block will run after the user submits and the rerun (if any from chat_input) happens
-        # Or if no rerun, it processes immediately.
-        user_prompt_for_bot = st.session_state.chat_history[-1]["content"] # Get the actual last user prompt
-        
-        # Construct a temporary history for the bot, excluding the very last user prompt if it's just been added and not yet processed
-        # The `chat_with_plant` function itself will append the user_prompt_for_bot if it needs to.
-        # We pass the full history, and the function can decide what to do.
-        
-        with st.spinner(f"{chatbot_name} is thinking..."):
-            bot_response = chat_with_plant(current_plant_care_info, st.session_state.chat_history, plant_id_result)
-        
-        timestamp = datetime.now(EASTERN_TZ).strftime("%H:%M")
-        st.session_state.chat_history.append({"role": "assistant", "content": bot_response, "time": timestamp})
-        
-        # Update chat log in saved photos if applicable
-        if st.session_state.get("viewing_saved_details") and st.session_state.viewing_saved_details in st.session_state.saved_photos:
-            st.session_state.saved_photos[st.session_state.viewing_saved_details]['chat_log'] = st.session_state.chat_history
-        st.rerun() # Rerun to display the new bot message
+        # Check if this user message has already been processed by looking for a subsequent bot message
+        # This is a simple way to prevent reprocessing. A more robust way might involve IDs or flags.
+        needs_processing = True
+        if len(st.session_state.chat_history) > 1 and st.session_state.chat_history[-2]["role"] == "user":
+             #This implies the bot has not responded to the latest user message yet
+             pass
+        elif len(st.session_state.chat_history) > 0 and st.session_state.chat_history[-1]["role"] == "user":
+             # If it's the very first user message, or the one before it was a bot, it needs processing
+             pass
+
+
+        # Check if the very last message is user and the one before it is NOT also user (meaning bot hasn't replied yet)
+        is_last_user = st.session_state.chat_history[-1]["role"] == "user"
+        # This logic needs to be careful: if there's only one message and it's user, process.
+        # If there are more, and last is user AND previous is bot, process.
+        should_process_bot_response = False
+        if len(st.session_state.chat_history) == 1 and is_last_user:
+            should_process_bot_response = True
+        elif len(st.session_state.chat_history) > 1 and is_last_user and st.session_state.chat_history[-2]["role"] != "user":
+            should_process_bot_response = True
+
+
+        if should_process_bot_response:
+            with st.spinner(f"{chatbot_name} is thinking..."):
+                bot_response = chat_with_plant(current_plant_care_info, st.session_state.chat_history, plant_id_result)
+            
+            timestamp = datetime.now(EASTERN_TZ).strftime("%H:%M")
+            st.session_state.chat_history.append({"role": "assistant", "content": bot_response, "time": timestamp})
+            
+            if st.session_state.get("viewing_saved_details") and st.session_state.viewing_saved_details in st.session_state.saved_photos:
+                st.session_state.saved_photos[st.session_state.viewing_saved_details]['chat_log'] = st.session_state.chat_history
+            st.rerun()
 
 # --- Main App Logic ---
 def main():
@@ -348,7 +360,7 @@ def main():
     for k,v in defaults.items():
         if k not in st.session_state: st.session_state[k] = v
 
-    st.markdown(get_ring_html_css(), unsafe_allow_html=True) # Inject all CSS
+    st.markdown(get_ring_html_css(), unsafe_allow_html=True)
 
     st.sidebar.title("📚 Plant Buddy")
     nav_options = ["🏠 Home", "🆔 Identify New Plant", "🪴 My Saved Plants", "📊 Plant Stats"]
@@ -357,11 +369,9 @@ def main():
 
     if nav_choice != st.session_state.current_nav_choice:
         st.session_state.current_nav_choice = nav_choice
-        # Reset relevant states when main navigation changes
         st.session_state.viewing_home_page = (nav_choice == "🏠 Home")
         if nav_choice != "🪴 My Saved Plants": st.session_state.viewing_saved_details = None
         if nav_choice != "📊 Plant Stats": st.session_state.viewing_plant_stats = None
-        # If navigating to "Identify", clear previous ID process unless a file is already there
         if nav_choice == "🆔 Identify New Plant" and not st.session_state.get("uploaded_file_bytes"):
              for key_to_reset in ["plant_id_result", "plant_care_info", "chat_history", "current_chatbot_plant_name", "suggestions", "saving_mode", "plant_id_result_for_care_check", "suggestion_just_selected"]:
                 st.session_state[key_to_reset] = [] if key_to_reset == "chat_history" else None
@@ -375,12 +385,12 @@ def main():
         sel_saved = st.sidebar.selectbox("View Saved:", saved_opts, key="sb_saved_view", index=sel_saved_idx, label_visibility="collapsed")
         if sel_saved != "-- Select --" and sel_saved != st.session_state.viewing_saved_details:
             st.session_state.viewing_saved_details = sel_saved
-            st.session_state.current_nav_choice = "🪴 My Saved Plants" # Switch view
-            st.session_state.viewing_plant_stats = None # Clear stats view if any
+            st.session_state.current_nav_choice = "🪴 My Saved Plants"
+            st.session_state.viewing_plant_stats = None
             st.rerun()
         elif sel_saved == "-- Select --" and st.session_state.viewing_saved_details:
-            st.session_state.viewing_saved_details = None # User deselected
-            if st.session_state.current_nav_choice == "🪴 My Saved Plants": st.rerun() # Refresh saved plants overview
+            st.session_state.viewing_saved_details = None
+            if st.session_state.current_nav_choice == "🪴 My Saved Plants": st.rerun()
 
     care_data = load_plant_care_data()
     api_ok = not (not PLANTNET_API_KEY or PLANTNET_API_KEY == "your_plantnet_api_key_here")
@@ -393,13 +403,22 @@ def main():
         if "welcome_response" not in st.session_state:
             if GEMINI_API_KEY and GEMINI_API_KEY != "your_gemini_api_key_here":
                 with st.spinner("Loading welcome..."):
-                    st.session_state.welcome_response = send_message([{"role":"user","parts":[{"text":"System: Be Plant Buddy. Welcome users (2-3 sentences), mention ID, care, chat, stats features."}]},{"role":"model","parts":[{"text":"Okay!"}]}])
+                    # Simplified Gemini call for welcome message
+                    st.session_state.welcome_response = send_message([{"role":"user","parts":[{"text":"System: You are Plant Buddy. Give a friendly welcome (2-3 sentences) for the app. Mention features: ID, care tips, chat, health stats."}]},{"role":"model","parts":[{"text":"Got it!"}]}])
+
             else: st.session_state.welcome_response = welcome_msg
         st.markdown(f"""<div style="background-color: #e6ffed; padding:20px; border-radius:10px; border-left:5px solid #4CAF50; margin-bottom:20px;"><h3 style="color:#2E7D32;">🌱 Hello Plant Lover!</h3><p style="font-size:1.1em; color:#333333;">{st.session_state.welcome_response or welcome_msg}</p></div>""", unsafe_allow_html=True)
+        
         st.subheader("🔍 What You Can Do")
         hc1,hc2=st.columns(2)
-        if hc1.button("📸 Identify My Plant!",use_container_width=True,type="primary"): st.session_state.current_nav_choice="🆔 Identify New Plant"; st.rerun()
-        if hc2.button("💚 Go to My Plants",use_container_width=True): st.session_state.current_nav_choice="🪴 My Saved Plants"; st.rerun()
+        # Adding some text to the buttons for clarity
+        with hc1:
+            st.markdown("Identify unknown plants instantly.")
+            if st.button("📸 Identify My Plant!",use_container_width=True,type="primary"): st.session_state.current_nav_choice="🆔 Identify New Plant"; st.rerun()
+        with hc2:
+            st.markdown("Access your plant family's profiles.")
+            if st.button("💚 Go to My Plants",use_container_width=True): st.session_state.current_nav_choice="🪴 My Saved Plants"; st.rerun()
+
         if st.session_state.saved_photos:
             st.divider(); st.subheader("🪴 Your Recent Plants")
             recent = list(st.session_state.saved_photos.items())[-3:]; recent.reverse()
@@ -420,7 +439,7 @@ def main():
     # ==================================== IDENTIFY NEW PLANT ====================================
     elif st.session_state.current_nav_choice == "🆔 Identify New Plant":
         st.header("🔎 Identify a New Plant")
-        st.session_state.last_view = "🆔 Identify New Plant" # Track last view for state resets
+        st.session_state.last_view = "🆔 Identify New Plant"
         up_file = st.file_uploader("Upload a clear photo:", type=["jpg","jpeg","png"], key="uploader_id",
                                    on_change=lambda: st.session_state.update({k:v for k,v in defaults.items() if k in ["plant_id_result","plant_care_info","chat_history","current_chatbot_plant_name","suggestions","uploaded_file_bytes","uploaded_file_type","saving_mode","plant_id_result_for_care_check","suggestion_just_selected"]}))
         if up_file and not st.session_state.uploaded_file_bytes:
@@ -481,24 +500,24 @@ def main():
             if entry.get("image"): display_image_with_max_height(entry["image"],nick_to_view,400)
             st.divider(); saved_id_res = entry.get("id_result")
             if saved_id_res: display_identification_result(saved_id_res)
-            if st.session_state.get("plant_id_result") != saved_id_res: st.session_state.plant_id_result=saved_id_res # Sync for chat
+            if st.session_state.get("plant_id_result") != saved_id_res: st.session_state.plant_id_result=saved_id_res
             st.divider(); saved_care = entry.get("care_info")
-            if st.session_state.get("plant_care_info") != saved_care: st.session_state.plant_care_info=saved_care # Sync for chat
+            if st.session_state.get("plant_care_info") != saved_care: st.session_state.plant_care_info=saved_care
             
             btn_col1, btn_col2 = st.columns([0.7, 0.3])
             if btn_col1.button(f"📊 View Stats for {nick_to_view}",key=f"stats_btn_saved_{nick_to_view}",use_container_width=True):
                 st.session_state.viewing_plant_stats=nick_to_view; st.session_state.current_nav_choice="📊 Plant Stats"; st.rerun()
             
-            if saved_care: display_care_instructions(saved_care); st.divider(); display_chat_interface(saved_care, saved_id_res)
+            if saved_care: display_care_instructions(saved_care); st.divider(); display_chat_interface(current_plant_care_info=saved_care, plant_id_result=saved_id_res) # Pass both
             else:
                 st.info("No specific care saved."); st.divider()
-                if saved_id_res: st.info("Chat based on saved ID."); display_chat_interface(plant_id_result=saved_id_res)
+                if saved_id_res: st.info("Chat based on saved ID."); display_chat_interface(plant_id_result=saved_id_res) # Pass only ID
             
             st.divider()
             confirm_key = f"confirm_del_{nick_to_view}"
             if confirm_key not in st.session_state: st.session_state[confirm_key] = False
             if btn_col2.button(f"🗑️ Delete",key=f"del_btn_saved_{nick_to_view}",type="secondary",use_container_width=True, help=f"Delete {nick_to_view}"):
-                st.session_state[confirm_key] = True; st.rerun() # Trigger confirmation display
+                st.session_state[confirm_key] = True; st.rerun()
             if st.session_state[confirm_key]:
                 st.warning(f"Sure you want to delete '{nick_to_view}'?")
                 c1d,c2d=st.columns(2)
@@ -512,7 +531,7 @@ def main():
             num_g_cols=3; g_cols=st.columns(num_g_cols)
             for i,(nick,data) in enumerate(st.session_state.saved_photos.items()):
                 with g_cols[i%num_g_cols]:
-                    with st.container(border=True,height=300): # Fixed height for grid cards
+                    with st.container(border=True,height=300):
                         if data.get("image"): st.image(data["image"],caption=nick,use_container_width=True)
                         else: st.markdown(f"**{nick}**")
                         id_res_g = data.get("id_result",{}); com_n_g=id_res_g.get('common_name','N/A')
@@ -521,7 +540,7 @@ def main():
                         if gc1.button("Details",key=f"g_detail_{nick}",use_container_width=True): st.session_state.viewing_saved_details=nick; st.rerun()
                         if gc2.button("📊 Stats",key=f"g_stats_{nick}",use_container_width=True): st.session_state.viewing_plant_stats=nick;st.session_state.current_nav_choice="📊 Plant Stats";st.rerun()
 
-    # ==================================== PLANT STATS ====================================
+    # ==================================== PLANT STATS (Error Fix Applied) ====================================
     elif st.session_state.current_nav_choice == "📊 Plant Stats":
         st.session_state.last_view = "📊 Plant Stats"
         p_nick_stats = st.session_state.get("viewing_plant_stats")
@@ -536,7 +555,14 @@ def main():
             sim_time=(datetime.now(EASTERN_TZ)-timedelta(minutes=random.randint(1,5))).strftime('%H:%M')
             m_lvl=p_data_stats.get("moisture_level",random.randint(30,70))
             r1=generate_ring_html("Moisture",str(m_lvl),f"OF {MOISTURE_MAX_PERCENT}%",m_lvl,MOISTURE_COLOR,MOISTURE_TRACK_COLOR,sim_time,f"Soil moisture {m_lvl}%.",0)
-            care_s=p_data_stats.get("care_info",{}); temp_rng_s=care_s.get("Temperature Range","65-85°F"); min_f,max_f=parse_temp_range(temp_rng_s)
+            
+            # --- ATTRIBUTE ERROR FIX APPLIED HERE ---
+            care_s = p_data_stats.get("care_info") 
+            if not isinstance(care_s, dict): care_s = {} # Ensure care_s is a dict
+            temp_rng_s = care_s.get("Temperature Range", "65-85°F") 
+            min_f,max_f = parse_temp_range(temp_rng_s)
+            # --- END OF FIX ---
+
             curr_temp_s=TEMP_DISPLAY_MIN_F-5
             if min_f is not None and max_f is not None: mid=(min_f+max_f)/2; curr_temp_s=round(max(TEMP_DISPLAY_MIN_F-5,min(TEMP_DISPLAY_MAX_F+5,random.uniform(mid-7,mid+7))))
             else: curr_temp_s=random.randint(68,78)
@@ -547,7 +573,7 @@ def main():
             st.markdown(f'<div class="watch-face-grid">{r1}{r2}{r3}</div>',unsafe_allow_html=True); st.divider()
             
             img_c,info_c=st.columns([0.4,0.6])
-            if img_c.toggle("Show Image", value=True, key=f"show_img_stats_{p_nick_stats}"): # Added toggle for image
+            if img_c.toggle("Show Image", value=True, key=f"show_img_stats_{p_nick_stats}"): 
                  if p_data_stats.get("image"): display_image_with_max_height(p_data_stats["image"],max_height_px=250)
             with info_c:
                 st.subheader("Plant Identification"); id_res_s=p_data_stats.get("id_result",{})
